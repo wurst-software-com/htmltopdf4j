@@ -24,7 +24,20 @@ final class VerticalAlign {
      * does unless it says otherwise.
      */
     static boolean isBaseline(String keyword) {
-        return keyword == null || keyword.isBlank() || keyword.trim().equalsIgnoreCase("baseline");
+        return keyword == null || keyword.isBlank() || asksForBaseline(keyword);
+    }
+
+    /**
+     * Whether this keyword asks for the baseline outright. A flex or grid item
+     * has to say so, because the initial value of {@code align-items} is
+     * {@code stretch} rather than the baseline a table cell falls back to.
+     */
+    static boolean asksForBaseline(String keyword) {
+        if (keyword == null) {
+            return false;
+        }
+        String value = keyword.trim().toLowerCase(Locale.ROOT);
+        return value.equals("baseline") || value.equals("first baseline");
     }
 
     /** {@code align-self: auto} defers to the container, which is the default. */
@@ -35,9 +48,8 @@ final class VerticalAlign {
     /**
      * Whether this keyword grows the box rather than moving it. {@code stretch}
      * is the initial value of {@code align-items}, so an absent one stretches
-     * too, and {@code baseline} is treated as a start alignment: the port has no
-     * cross-container baseline table, and starting is what it looks like for the
-     * single-line items a paged Document actually carries.
+     * too. {@code baseline} does not: it moves an item onto the common baseline
+     * its line works out, which is a shift rather than a height.
      */
     static boolean stretches(String keyword) {
         if (keyword == null || keyword.isBlank()) {

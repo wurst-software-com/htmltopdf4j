@@ -16,8 +16,12 @@ import java.util.Locale;
  * is {@code auto}), then grown or shrunk to fill the container, then placed
  * along the main axis by {@code justify-content}. That is the flexbox algorithm
  * in the shape that matters for a paged Document; what is deliberately not here
- * is baseline alignment and the intrinsic-size resolution a live layout needs to
- * do for resizable viewports, neither of which a fixed Page ever exercises.
+ * is the intrinsic-size resolution a live layout needs to do for resizable
+ * viewports, which a fixed Page never exercises.
+ *
+ * <p>Across the line, {@code align-items: baseline} drops the items onto the
+ * deepest of their first baselines, which is the shift a table row applies to
+ * its cells and is measured with the same {@link Layout#firstBaseline}.
  */
 final class FlexLayout {
 
@@ -70,7 +74,7 @@ final class FlexLayout {
         float[] heights = new float[lines.size()];
         for (int i = 0; i < lines.size(); i++) {
             sizes.add(mainSizes(lines.get(i), width, columnGap));
-            heights[i] = lineHeight(layout, lines.get(i), sizes.get(i));
+            heights[i] = lineHeight(layout, lines.get(i), sizes.get(i), style);
         }
 
         float free = crossFree(layout, style, heights, rowGap, width);
@@ -117,12 +121,64 @@ final class FlexLayout {
     }
 
     /** How tall a line is: as tall as the tallest item on it. */
-    private static float lineHeight(Layout layout, List<Item> line, float[] sizes) {
+    private static float lineHeight(Layout layout, List<Item> line, float[] sizes, ComputedStyle container) {
+        return lineHeight(layout, line, sizes, baselineShifts(layout, line, sizes, container));
+    }
+
+    /** The same, for a caller that has already worked out the line's baseline shifts. */
+    private static float lineHeight(Layout layout, List<Item> line, float[] sizes, float[] shifts) {
         float height = 0f;
         for (int i = 0; i < line.size(); i++) {
-            height = Math.max(height, layout.measureChildren(line.get(i).box(), sizes[i]));
+            // An item dropped onto the line's baseline reaches that much further
+            // down, so the line has to be tall enough for where it ended up.
+            height = Math.max(height, shifts[i] + layout.measureChildren(line.get(i).box(), sizes[i]));
         }
         return height;
+    }
+
+    /**
+     * How far each item has to drop to put its first line on the line's common
+     * baseline — the deepest first baseline among the items that asked for it.
+     *
+     * <p>This is the shift a table row applies to its cells, measured the same
+     * way: an item with no first line to align has nothing to drop and no vote
+     * on where the common baseline is, and every other item stays where it was.
+     */
+    private static float[] baselineShifts(
+            Layout layout, List<Item> line, float[] sizes, ComputedStyle container) {
+
+        float[] baselines = new float[line.size()];
+        float common = 0f;
+        for (int i = 0; i < line.size(); i++) {
+            BlockBox box = line.get(i).box();
+            baselines[i] = Float.NaN;
+            if (!VerticalAlign.asksForBaseline(alignmentOf(box, container))) {
+                continue;
+            }
+            ComputedStyle style = box.style();
+            Edges padding = Edges.padding(style, sizes[i]);
+            Edges border = Edges.borderWidths(style);
+            float inner = Math.max(1f, sizes[i] - padding.horizontal() - border.horizontal());
+            float baseline = layout.firstBaseline(box.children(), inner);
+            if (!Float.isNaN(baseline)) {
+                baselines[i] = Edges.margin(style, sizes[i]).top() + border.top() + padding.top() + baseline;
+                common = Math.max(common, baselines[i]);
+            }
+        }
+        float[] shifts = new float[baselines.length];
+        for (int i = 0; i < baselines.length; i++) {
+            shifts[i] = Float.isNaN(baselines[i]) ? 0f : common - baselines[i];
+        }
+        return shifts;
+    }
+
+    /**
+     * What decides where one item sits across its line: {@code align-self} when
+     * it says anything, and the container's {@code align-items} otherwise.
+     */
+    private static String alignmentOf(BlockBox box, ComputedStyle container) {
+        String self = box.style().raw("align-self");
+        return VerticalAlign.isAuto(self) ? container.raw("align-items") : self;
     }
 
     /** A column container stacks its items, which is what block flow already does. */
@@ -231,18 +287,20 @@ final class FlexLayout {
             layout.ensureWhole(lineHeight);
         }
 
-        String containerAlignment = container.raw("align-items");
+        float[] shifts = baselineShifts(layout, line, sizes, container);
         float top = layout.y();
         float bottom = top;
         for (int index : order) {
             BlockBox box = line.get(index).box();
             // `align-self` decides for one item, `align-items` for the rest, and
             // `stretch` is a height rather than an offset.
-            String self = box.style().raw("align-self");
-            String alignment = VerticalAlign.isAuto(self) ? containerAlignment : self;
+            String alignment = alignmentOf(box, container);
             boolean stretch = VerticalAlign.stretches(alignment);
             float free = lineHeight - layout.measureChildren(box, sizes[index]);
-            layout.setY(top + (stretch ? 0f : VerticalAlign.offset(alignment, free)));
+            // A baseline-aligned item drops onto the line's baseline; the other
+            // keywords divide the room the item leaves over instead.
+            layout.setY(top + (stretch ? 0f
+                    : shifts[index] > 0f ? shifts[index] : VerticalAlign.offset(alignment, free)));
             layout.flowItem(box, x, width, sizes[index], stretch ? lineHeight : null);
             bottom = Math.max(bottom, layout.y());
             x += sizes[index] + line.get(index).outerMargin() + between;
