@@ -94,8 +94,34 @@
         <version>3.5.2</version>
         <configuration>
           <argLine>-Djava.awt.headless=true</argLine>
+          <!-- The scale document is 1.8 MB and renders in seconds, not
+               milliseconds; it does not belong in the loop run on every change.
+               `mvn test -Pscale` runs it. -->
+          <excludedGroups>scale</excludedGroups>
         </configuration>
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!-- The scale document (src/test/resources/scale/). The heap cap is part of
+         the assertion: the engine should hold one document, not the document and
+         a copy of everything it has painted so far. -->
+    <profile>
+      <id>scale</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <argLine>-Djava.awt.headless=true -Xmx512m</argLine>
+              <excludedGroups combine.self="override"/>
+              <groups>scale</groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

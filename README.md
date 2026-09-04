@@ -108,6 +108,7 @@ Expectation files.
 
 ```
 mvn test        # 585 tests, including 48 Fixtures against their Expectations
+mvn test -Pscale   # the 1.8 MB scale document, excluded from the loop above
 ```
 
 Java 21 is required to build and to run.
@@ -136,6 +137,8 @@ installed is covered by unit tests that skip, not by a Fixture.
 - [docs/coverage-matrix.md](docs/coverage-matrix.md) — what renders, and how well.
 - [docs/reference-tests.md](docs/reference-tests.md) — every one of the Rust
   engine's 219 unit tests, and whether it was ported or dropped.
+- [docs/adr/README.md](docs/adr/README.md) — and what became of the reference
+  engine's own nine decisions.
 
 ## Licence
 
