@@ -20,14 +20,3 @@ features/paged-media
 features/font-family
 features/font-face
 
-# --- Being implemented --------------------------------------------------------
-# border-radius corners as Bezier curves.
-features/borders
-# overflow: hidden, which clips with `re W n`.
-features/pct-sizing
-# CSS custom properties and var().
-features/custom-properties
-# text-transform.
-features/text-polish
-# ::before and ::after generated content.
-features/generated-content

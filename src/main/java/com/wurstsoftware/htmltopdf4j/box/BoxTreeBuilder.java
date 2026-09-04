@@ -105,6 +105,7 @@ public final class BoxTreeBuilder {
 
     private void appendChildren(Element element, Content content, String link) {
         ComputedStyle style = cascade.styleOf(element);
+        appendGenerated(element, Cascade.Pseudo.BEFORE, content, link);
         for (Node node : element.childNodes()) {
             switch (node) {
                 case TextNode text -> appendText(text.getWholeText(), style, content, link);
@@ -112,6 +113,23 @@ public final class BoxTreeBuilder {
                 default -> { /* comments, doctypes and data nodes generate no boxes */ }
             }
         }
+        appendGenerated(element, Cascade.Pseudo.AFTER, content, link);
+    }
+
+    /**
+     * Emits a {@code ::before} or {@code ::after}'s content as an inline run.
+     *
+     * <p>Generated content is inline: it joins the line its originating element
+     * is on rather than starting one, which is what makes a required-field
+     * asterisk sit against the label instead of below it.
+     */
+    private void appendGenerated(Element element, Cascade.Pseudo pseudo, Content content, String link) {
+        cascade.pseudoStyleOf(element, pseudo).ifPresent(style -> {
+            String text = GeneratedContent.of(style.raw("content"), element);
+            if (!text.isEmpty()) {
+                content.inline(InlineRun.text(text, style, link));
+            }
+        });
     }
 
     private void appendElement(Element element, Content content, String link) {
@@ -188,7 +206,7 @@ public final class BoxTreeBuilder {
         if (collapsed.isEmpty()) {
             return;
         }
-        content.inline(InlineRun.text(collapsed, style, link));
+        content.inline(InlineRun.text(transform(collapsed, style), style, link));
     }
 
     /** Preformatted text keeps its spaces, and each newline is a forced break. */
@@ -199,9 +217,38 @@ public final class BoxTreeBuilder {
                 content.breakLine(style);
             }
             if (!lines[i].isEmpty()) {
-                content.inline(InlineRun.text(lines[i], style, link));
+                content.inline(InlineRun.text(transform(lines[i], style), style, link));
             }
         }
+    }
+
+    /**
+     * Applies {@code text-transform}. The transform happens here rather than at
+     * paint time so that the transformed text is what gets measured, wrapped and
+     * put in the PDF's {@code /ToUnicode} map — a reader copying the text out
+     * gets what was rendered.
+     */
+    private static String transform(String text, ComputedStyle style) {
+        return switch (style.raw("text-transform", "none").trim().toLowerCase(Locale.ROOT)) {
+            case "uppercase" -> text.toUpperCase(Locale.ROOT);
+            case "lowercase" -> text.toLowerCase(Locale.ROOT);
+            case "capitalize" -> capitalize(text);
+            default -> text;
+        };
+    }
+
+    /** Upper-cases the first letter of each word, leaving the rest as the author wrote it. */
+    private static String capitalize(String text) {
+        StringBuilder capitalized = new StringBuilder(text);
+        boolean atWordStart = true;
+        for (int i = 0; i < capitalized.length(); i++) {
+            char c = capitalized.charAt(i);
+            if (atWordStart && Character.isLetter(c)) {
+                capitalized.setCharAt(i, Character.toUpperCase(c));
+            }
+            atWordStart = !Character.isLetterOrDigit(c);
+        }
+        return capitalized.toString();
     }
 
     private static boolean preservesWhitespace(ComputedStyle style) {

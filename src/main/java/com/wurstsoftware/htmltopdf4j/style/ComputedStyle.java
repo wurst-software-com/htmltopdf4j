@@ -38,8 +38,8 @@ public final class ComputedStyle {
         this.parent = parent;
         this.rootFontSize = rootFontSize;
         this.fontSize = computeFontSize(parent);
-        this.display = Display.parse(declared.get("display"), Display.INLINE);
-        this.color = CssColor.parse(declared.get("color"))
+        this.display = Display.parse(value("display"), Display.INLINE);
+        this.color = CssColor.parse(value("color"))
                 .orElseGet(() -> parent != null ? parent.color() : Color.BLACK);
         this.rtl = computeDirection(parent);
     }
@@ -60,7 +60,7 @@ public final class ComputedStyle {
 
     private float computeFontSize(ComputedStyle parent) {
         float inherited = parent != null ? parent.fontSize : INITIAL_FONT_SIZE;
-        String value = declared.get("font-size");
+        String value = value("font-size");
         if (value == null) {
             return inherited;
         }
@@ -93,7 +93,7 @@ public final class ComputedStyle {
     }
 
     private boolean computeDirection(ComputedStyle parent) {
-        String value = declared.get("direction");
+        String value = value("direction");
         if (value != null) {
             return value.trim().equalsIgnoreCase("rtl");
         }
@@ -124,18 +124,18 @@ public final class ComputedStyle {
     }
 
     public Optional<Color> backgroundColor() {
-        return CssColor.parse(declared.get("background-color"));
+        return CssColor.parse(value("background-color"));
     }
 
     public TextAlign textAlign() {
-        String value = declared.get("text-align");
+        String value = value("text-align");
         TextAlign inherited = parent != null ? parent.textAlign() : (rtl ? TextAlign.RIGHT : TextAlign.LEFT);
         return TextAlign.parse(value, rtl, inherited);
     }
 
     /** The families to try, in order, before falling back to the default Face. */
     public List<String> fontFamily() {
-        String value = declared.get("font-family");
+        String value = value("font-family");
         if (value == null) {
             return parent != null ? parent.fontFamily() : List.of();
         }
@@ -150,7 +150,7 @@ public final class ComputedStyle {
     }
 
     public boolean bold() {
-        String value = declared.get("font-weight");
+        String value = value("font-weight");
         if (value == null) {
             return parent != null && parent.bold();
         }
@@ -165,7 +165,7 @@ public final class ComputedStyle {
     }
 
     public boolean italic() {
-        String value = declared.get("font-style");
+        String value = value("font-style");
         if (value == null) {
             return parent != null && parent.italic();
         }
@@ -182,9 +182,9 @@ public final class ComputedStyle {
     }
 
     private boolean hasDecoration(String keyword) {
-        String value = declared.get("text-decoration");
+        String value = value("text-decoration");
         if (value == null) {
-            value = declared.get("text-decoration-line");
+            value = value("text-decoration-line");
         }
         if (value == null) {
             // Decoration is not an inherited property, but it does propagate to
@@ -198,7 +198,7 @@ public final class ComputedStyle {
 
     /** {@code line-height}, empty for {@code normal}. */
     public Optional<LineHeight> lineHeight() {
-        String value = declared.get("line-height");
+        String value = value("line-height");
         if (value == null) {
             return parent != null ? parent.lineHeight() : Optional.empty();
         }
@@ -241,6 +241,7 @@ public final class ComputedStyle {
             "quotes",
             "text-indent",
             "text-transform",
+            "text-align",
             "visibility",
             "white-space",
             "word-break",
@@ -256,6 +257,73 @@ public final class ComputedStyle {
      * here rather than in each accessor, so they work for every property at once.
      */
     public String value(String property) {
+        return substituteVariables(declaredOrInherited(property), 0);
+    }
+
+    /**
+     * Replaces every {@code var(--name, fallback)} with the custom property it
+     * names, or with its fallback when that property is not set.
+     *
+     * <p>Custom properties resolve against <em>this</em> element's chain, which
+     * is what lets a subtree redefine {@code --brand} and have every descendant
+     * that reads it change with it. Substitution is bounded, because
+     * {@code --a: var(--b)} and {@code --b: var(--a)} is legal CSS to write.
+     */
+    private String substituteVariables(String value, int depth) {
+        if (value == null || depth > MAX_VARIABLE_DEPTH || !value.contains("var(")) {
+            return value;
+        }
+        StringBuilder resolved = new StringBuilder(value.length());
+        int i = 0;
+        while (i < value.length()) {
+            int start = value.indexOf("var(", i);
+            if (start < 0) {
+                resolved.append(value, i, value.length());
+                break;
+            }
+            resolved.append(value, i, start);
+            int end = closingParenthesis(value, start + 4);
+            if (end < 0) {
+                resolved.append(value, start, value.length());
+                break;
+            }
+            String reference = substituteVariables(resolve(value.substring(start + 4, end)), depth + 1);
+            if (reference == null) {
+                // A var() that resolves to nothing makes the whole declaration
+                // invalid at computed-value time, as CSS requires.
+                return null;
+            }
+            resolved.append(reference);
+            i = end + 1;
+        }
+        return resolved.toString();
+    }
+
+    /** Looks up one {@code var()} argument list: the custom property, else its fallback. */
+    private String resolve(String arguments) {
+        int comma = arguments.indexOf(',');
+        String name = (comma < 0 ? arguments : arguments.substring(0, comma)).trim();
+        String fallback = comma < 0 ? null : arguments.substring(comma + 1).trim();
+        String custom = declaredOrInherited(name);
+        return custom != null ? custom : fallback;
+    }
+
+    private static int closingParenthesis(String value, int from) {
+        int depth = 1;
+        for (int i = from; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '(') {
+                depth++;
+            } else if (c == ')' && --depth == 0) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static final int MAX_VARIABLE_DEPTH = 16;
+
+    private String declaredOrInherited(String property) {
         String declaredValue = declared.get(property);
         if (declaredValue != null) {
             String keyword = declaredValue.trim().toLowerCase(Locale.ROOT);
@@ -267,15 +335,20 @@ public final class ComputedStyle {
             }
             // `unset` means `inherit` for an inherited property and `initial`
             // for every other one.
-            if (keyword.equals("unset") && !INHERITED.contains(property)) {
+            if (keyword.equals("unset") && !inherits(property)) {
                 return null;
             }
-            return parent != null ? parent.value(property) : null;
+            return parent != null ? parent.declaredOrInherited(property) : null;
         }
-        if (INHERITED.contains(property) && parent != null) {
-            return parent.value(property);
+        if (inherits(property) && parent != null) {
+            return parent.declaredOrInherited(property);
         }
         return null;
+    }
+
+    /** Custom properties always inherit, which is what makes a themed subtree work. */
+    private static boolean inherits(String property) {
+        return property.startsWith("--") || INHERITED.contains(property);
     }
 
     public Optional<Length> length(String property) {

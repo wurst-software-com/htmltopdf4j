@@ -214,6 +214,11 @@ public final class Layout {
         int startMark = page().mark();
 
         anchor(block);
+        float clipHeight = clippedHeight(style, border, padding);
+        if (clipHeight > 0f) {
+            page().add(new PaintCommand.PushClipRect(
+                    new Rect(boxLeft, pdfY(startY + clipHeight), outerWidth, clipHeight)));
+        }
         y += border.top() + padding.top();
         if (block.marker() != null) {
             paintMarker(block, contentX);
@@ -227,6 +232,14 @@ public final class Layout {
         if (pageIndex == startPage && y - startY < minimumHeight) {
             y = startY + minimumHeight;
         }
+        if (clipHeight > 0f) {
+            page().add(new PaintCommand.PopClip());
+            if (pageIndex == startPage) {
+                // Content taller than the clip is drawn and then clipped away,
+                // but it must not push the following blocks down.
+                y = startY + clipHeight;
+            }
+        }
 
         paintBoxDecoration(block, startPage, startY, startMark, boxLeft, outerWidth, border, padding);
 
@@ -235,6 +248,29 @@ public final class Layout {
             return 0f;
         }
         return margin.bottom();
+    }
+
+    /**
+     * The border-box height a block clips its content to, or zero when it does
+     * not clip. {@code overflow: hidden} without a definite height clips
+     * nothing, because there is nothing for the content to overflow.
+     */
+    private float clippedHeight(ComputedStyle style, Edges border, Edges padding) {
+        String overflow = style.raw("overflow", "visible").trim().toLowerCase(java.util.Locale.ROOT);
+        if (!overflow.equals("hidden") && !overflow.equals("clip")) {
+            return 0f;
+        }
+        float page = contentBottom - contentTop;
+        float declared = style.length("height")
+                .or(() -> style.length("max-height"))
+                .map(height -> style.resolve(height, page))
+                .orElse(0f);
+        if (declared <= 0f) {
+            return 0f;
+        }
+        return style.keyword("box-sizing", "border-box")
+                ? declared
+                : declared + border.vertical() + padding.vertical();
     }
 
     /**

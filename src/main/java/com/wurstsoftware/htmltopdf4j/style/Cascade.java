@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -45,7 +46,36 @@ public final class Cascade {
 
     private static final Stylesheet USER_AGENT = loadUserAgentStylesheet();
 
+    /** The two pseudo-elements this engine generates content for. */
+    public enum Pseudo {
+        BEFORE("::before"),
+        AFTER("::after");
+
+        private final String suffix;
+        private final String legacySuffix;
+
+        Pseudo(String suffix) {
+            this.suffix = suffix;
+            this.legacySuffix = suffix.substring(1);
+        }
+
+        /** The element part of a selector that targets this pseudo-element, or {@code null}. */
+        String baseOf(String selector) {
+            String trimmed = selector.trim();
+            String lower = trimmed.toLowerCase(Locale.ROOT);
+            if (lower.endsWith(suffix)) {
+                return trimmed.substring(0, trimmed.length() - suffix.length());
+            }
+            // `:before` is the CSS2 spelling, and documents in the wild still use it.
+            if (lower.endsWith(legacySuffix)) {
+                return trimmed.substring(0, trimmed.length() - legacySuffix.length());
+            }
+            return null;
+        }
+    }
+
     private final Map<Element, ComputedStyle> styles = new IdentityHashMap<>();
+    private final Map<Pseudo, Map<Element, ComputedStyle>> pseudoStyles = new java.util.EnumMap<>(Pseudo.class);
     private final Stylesheet authorStyles;
 
     private Cascade(Stylesheet authorStyles) {
@@ -64,8 +94,25 @@ public final class Cascade {
         collect(document, stylesheet, Level.AUTHOR_NORMAL, Level.AUTHOR_IMPORTANT, declared);
         collectInlineStyles(document, declared);
 
+        Map<Pseudo, Map<Element, Map<String, Winner>>> pseudoDeclared = new java.util.EnumMap<>(Pseudo.class);
+        for (Pseudo pseudo : Pseudo.values()) {
+            Map<Element, Map<String, Winner>> forPseudo = new IdentityHashMap<>();
+            collectPseudo(document, USER_AGENT, Level.UA_NORMAL, Level.UA_IMPORTANT, pseudo, forPseudo);
+            collectPseudo(document, stylesheet, Level.AUTHOR_NORMAL, Level.AUTHOR_IMPORTANT, pseudo, forPseudo);
+            pseudoDeclared.put(pseudo, forPseudo);
+        }
+
         cascade.compute(document, declared);
+        cascade.computePseudo(pseudoDeclared);
         return cascade;
+    }
+
+    /**
+     * The style of an element's {@code ::before} or {@code ::after}, or empty
+     * when no rule generates one.
+     */
+    public java.util.Optional<ComputedStyle> pseudoStyleOf(Element element, Pseudo pseudo) {
+        return java.util.Optional.ofNullable(pseudoStyles.get(pseudo)).map(map -> map.get(element));
     }
 
     /** The computed style of an element; the initial style for one never cascaded. */
@@ -103,6 +150,38 @@ public final class Cascade {
             if (matches.isEmpty()) {
                 continue;
             }
+            for (Declaration declaration : rule.declarations()) {
+                Level level = declaration.important() ? important : normal;
+                for (Map.Entry<String, String> longhand :
+                        Shorthands.expand(declaration.property(), declaration.value()).entrySet()) {
+                    for (Element element : matches) {
+                        offer(declared, element, longhand.getKey(), longhand.getValue(),
+                                level, rule.specificity(), rule.order());
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Collects the rules that target a pseudo-element. jsoup cannot match
+     * {@code ::before}, so the pseudo is stripped off and the element part is
+     * matched instead — which is exactly what the pseudo means.
+     */
+    private static void collectPseudo(
+            Document document,
+            Stylesheet stylesheet,
+            Level normal,
+            Level important,
+            Pseudo pseudo,
+            Map<Element, Map<String, Winner>> declared) {
+
+        for (StyleRule rule : stylesheet.rules()) {
+            String base = pseudo.baseOf(rule.selector());
+            if (base == null) {
+                continue;
+            }
+            List<Element> matches = match(document, base.isEmpty() ? "*" : base);
             for (Declaration declaration : rule.declarations()) {
                 Level level = declaration.important() ? important : normal;
                 for (Map.Entry<String, String> longhand :
@@ -183,6 +262,25 @@ public final class Cascade {
         for (Element child : element.children()) {
             computeSubtree(child, style, declared, rootFontSize);
         }
+    }
+
+    /**
+     * Computes each pseudo-element's style with its originating element as the
+     * parent, so a {@code ::before} inherits the colour and font of the thing it
+     * is attached to.
+     */
+    private void computePseudo(Map<Pseudo, Map<Element, Map<String, Winner>>> declared) {
+        declared.forEach((pseudo, elements) -> {
+            Map<Element, ComputedStyle> computed = new IdentityHashMap<>();
+            elements.forEach((element, winners) -> {
+                ComputedStyle parent = styles.get(element);
+                if (parent != null) {
+                    computed.put(element, new ComputedStyle(
+                            valuesOf(element, elements), parent, parent.rootFontSize()));
+                }
+            });
+            pseudoStyles.put(pseudo, computed);
+        });
     }
 
     /**

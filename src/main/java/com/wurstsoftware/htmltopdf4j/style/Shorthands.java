@@ -31,7 +31,7 @@ public final class Shorthands {
             case "border" -> border(longhands, SIDES, value);
             case "border-top", "border-right", "border-bottom", "border-left" ->
                     border(longhands, List.of(property.substring("border-".length())), value);
-            case "border-radius" -> longhands.put("border-radius", firstToken(value));
+            case "border-radius" -> corners(longhands, value);
             case "background" -> background(longhands, value);
             case "font" -> font(longhands, value);
             case "flex" -> flex(longhands, value);
@@ -274,6 +274,25 @@ public final class Shorthands {
     }
 
     /** Splits on whitespace, keeping bracketed function arguments together. */
+    /**
+     * {@code border-radius} takes one to four corner radii, in the same
+     * clockwise-from-top-left order the other four-value shorthands use.
+     */
+    private static void corners(Map<String, String> longhands, String value) {
+        List<String> radii = tokens(value.split("/")[0]);
+        if (radii.isEmpty()) {
+            return;
+        }
+        String topLeft = radii.get(0);
+        String topRight = radii.size() > 1 ? radii.get(1) : topLeft;
+        String bottomRight = radii.size() > 2 ? radii.get(2) : topLeft;
+        String bottomLeft = radii.size() > 3 ? radii.get(3) : topRight;
+        longhands.put("border-top-left-radius", topLeft);
+        longhands.put("border-top-right-radius", topRight);
+        longhands.put("border-bottom-right-radius", bottomRight);
+        longhands.put("border-bottom-left-radius", bottomLeft);
+    }
+
     static List<String> tokens(String value) {
         List<String> parts = new ArrayList<>();
         StringBuilder current = new StringBuilder();
