@@ -163,6 +163,16 @@ final class FlexLayout {
             java.util.Collections.reverse(order);
         }
 
+        // A line whose items ask to stay whole moves as a unit, for the same
+        // reason a grid row does: half a line on each Page is nobody's intent.
+        if (line.stream().anyMatch(item -> BreakInside.avoids(item.box().style()))) {
+            float lineHeight = 0f;
+            for (int i = 0; i < line.size(); i++) {
+                lineHeight = Math.max(lineHeight, layout.measureChildren(line.get(i).box(), sizes[i]));
+            }
+            layout.ensureWhole(lineHeight);
+        }
+
         float top = layout.y();
         float bottom = top;
         for (int index : order) {

@@ -67,12 +67,39 @@ final class TableLayout {
         return starts;
     }
 
+    /**
+     * How tall the whole table would be, header and all, without laying it out.
+     *
+     * <p>This is what lets a box wrapping a table be measured at all: without it
+     * such a box measures as zero and anything that depends on its height — a
+     * grid track, a cell, an inline-block, a Page-break decision — is wrong.
+     */
+    static float measure(Layout layout, TableBox table, float width) {
+        int columnCount = table.columnCount();
+        if (columnCount == 0 || table.rows().isEmpty()) {
+            return 0f;
+        }
+        Edges margin = Edges.margin(table.style(), width);
+        float[] columns = columnWidths(layout, table, columnCount, Math.max(1f, width - margin.horizontal()));
+        List<int[]> starts = columnStarts(table, columnCount);
+
+        float height = margin.vertical();
+        for (int index = 0; index < table.rows().size(); index++) {
+            height += rowHeight(layout, table.rows().get(index), columns, starts.get(index));
+        }
+        return height;
+    }
+
     static void layout(Layout layout, TableBox table, float left, float width) {
         int columnCount = table.columnCount();
         if (columnCount == 0 || table.rows().isEmpty()) {
             return;
         }
         Edges margin = Edges.margin(table.style(), width);
+        // A table never reaches `layoutBlock`, so it honours the declaration here.
+        if (BreakInside.avoids(table.style())) {
+            layout.ensureWhole(measure(layout, table, width));
+        }
         layout.setY(layout.y() + margin.top());
 
         float available = Math.max(1f, width - margin.horizontal());

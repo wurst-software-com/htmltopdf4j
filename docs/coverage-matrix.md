@@ -4,7 +4,7 @@ What this engine renders, per HTML element and CSS feature: **Full**, **Partial*
 or **None**. "Partial" always says what is missing.
 
 This is the honest state of the port, not a roadmap. It is written against the
-code, and the Parity harness — 41 Fixtures, one JUnit case each — is what keeps
+code, and the Parity harness — 42 Fixtures, one JUnit case each — is what keeps
 it from drifting. Where a row says Full, there is a Fixture or a unit test that
 would fail if it stopped being true.
 
@@ -142,7 +142,11 @@ byte-identical output. Anything outside that is None here and stays None.
 | --- | --- | --- |
 | Pagination | Full | A single downward pass; a block that does not fit continues on the next Page |
 | `page-break-before/after: always`, `break-before/after` | Full | |
-| `page-break-inside: avoid` | None | |
+| `page-break-inside: avoid`, `break-inside: avoid`/`avoid-page` | Full | A box that would be divided by the Page boundary moves whole to the next Page. It is a hint: a box taller than the content area breaks as if the property were absent, rather than wasting a Page. Honoured on blocks, tables, and grid rows and flex lines — where the whole row or line moves, since moving one item would tear it |
+| `break-inside: avoid-column`, `avoid-region` | n/a | Accepted and ignored: this engine has neither columns nor regions, so there is nothing to avoid |
+| `page-break-inside` on a `<tr>` | Full | A table row is never divided by a Page boundary in any case |
+| `page-break-inside` on `<thead>`/`<tbody>` | None | A row group is not kept together; it is usually the whole table body, where `avoid` would degrade to `auto` anyway |
+| A block image at a Page boundary | Full | Never divided — an image that does not fit moves whole to the next Page, whatever `break-inside` says |
 | `orphans`, `widows` | Partial | Cascaded and inherited, but not yet enforced by the breaker |
 | Running headers and footers | Full | Through `@page` margin boxes |
 | `counter(page)`, `counter(pages)` | Full | |
@@ -175,7 +179,7 @@ byte-identical output. Anything outside that is None here and stays None.
 ## Environment dependence
 
 The known-failures ledger (`src/test/resources/parity-known-failures.txt`) is
-**empty**: all 41 Fixtures meet their Expectations. The mechanism stays, because
+**empty**: all 42 Fixtures meet their Expectations. The mechanism stays, because
 it can only shrink — a listed Fixture that starts passing fails the build — but
 it currently lists nothing.
 

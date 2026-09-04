@@ -38,6 +38,18 @@ One sheet of output at a fixed Paper size and orientation, holding the Paint
 commands that fall on it. Produced by Layout, consumed by the writer.
 _Avoid_: Sheet, Canvas
 
+**Content area**:
+The band of a Page that Flow content may occupy: the sheet less its margins.
+What "fits on a Page" is measured against.
+_Avoid_: Page box, Body area, Viewport (there is no viewport in a paged medium)
+
+**Unbreakable box**:
+A box that Layout must place on one Page or not at all, rather than dividing it
+at the Page boundary. A request, not a guarantee: a box taller than the Content
+area is divided anyway.
+_Avoid_: Atomic box (an atomic inline is a different thing — an image or an
+inline-block on a line), Keep-together, Widow
+
 **Display list**:
 The complete, backend-neutral sequence of Paint commands for a Page. The seam
 that keeps Layout from knowing anything about PDF.

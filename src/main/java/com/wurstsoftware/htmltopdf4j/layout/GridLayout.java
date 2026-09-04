@@ -109,19 +109,45 @@ final class GridLayout {
         }
 
         String containerAlignment = style.raw("align-items");
-        for (int i = 0; i < items.size(); i++) {
-            Placement placement = placements.get(i);
-            float x = left + offset(columns, placement.column(), columnGap);
-            float itemWidth = span(columns, placement.column(), placement.columnSpan(), columnGap);
-            float track = span(rows, placement.row(), placement.rowSpan(), rowGap);
-            float free = track - measured[i];
-            // `align-self` decides for one item, `align-items` for the rest.
-            String alignment = items.get(i).style().raw("align-self");
-            layout.setY(rowTops[placement.row()]
-                    + VerticalAlign.offset(alignment != null ? alignment : containerAlignment, free));
-            layout.flowItem(items.get(i), x, width, itemWidth);
+        for (int row = 0; row < rowCount; row++) {
+            // A row whose items ask to stay whole moves as a unit: breaking one
+            // item onto the next Page would leave its neighbours behind and tear
+            // the row in half.
+            if (avoidsBreak(items, placements, row)) {
+                layout.setY(rowTops[row]);
+                layout.ensureWhole(rows[row]);
+                float shift = layout.y() - rowTops[row];
+                for (int later = row; later <= rowCount; later++) {
+                    rowTops[later] += shift;
+                }
+            }
+            for (int i = 0; i < items.size(); i++) {
+                Placement placement = placements.get(i);
+                if (placement.row() != row) {
+                    continue;
+                }
+                float x = left + offset(columns, placement.column(), columnGap);
+                float itemWidth = span(columns, placement.column(), placement.columnSpan(), columnGap);
+                float track = span(rows, placement.row(), placement.rowSpan(), rowGap);
+                float free = track - measured[i];
+                // `align-self` decides for one item, `align-items` for the rest.
+                String alignment = items.get(i).style().raw("align-self");
+                layout.setY(rowTops[placement.row()]
+                        + VerticalAlign.offset(alignment != null ? alignment : containerAlignment, free));
+                layout.flowItem(items.get(i), x, width, itemWidth);
+            }
         }
-        layout.setY(Math.max(top, rowTops[rowCount] - rowGap));
+        layout.setY(rowTops[rowCount] - rowGap);
+    }
+
+    /** Whether any item starting in this row asks not to be divided by a Page. */
+    private static boolean avoidsBreak(List<BlockBox> items, List<Placement> placements, int row) {
+        for (int i = 0; i < items.size(); i++) {
+            if (placements.get(i).row() == row && BreakInside.avoids(items.get(i).style())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

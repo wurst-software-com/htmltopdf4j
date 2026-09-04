@@ -200,6 +200,22 @@ public final class Layout {
         }
     }
 
+    /**
+     * Starts a new Page when a box would be divided by the Page boundary and
+     * would fit whole on a Page of its own.
+     *
+     * <p>The second half of that condition is what keeps {@code avoid} a hint: a
+     * box taller than the content area has to break somewhere, and moving it to
+     * a fresh Page first would only waste one.
+     */
+    void ensureWhole(float height) {
+        if (y > contentTop
+                && y + height > contentBottom + 0.01f
+                && height <= contentBottom - contentTop) {
+            newPage();
+        }
+    }
+
     /** Flips a downward layout coordinate into PDF's upward page space. */
     private float pdfY(float layoutY) {
         return pageSize.height() - layoutY;
@@ -299,6 +315,12 @@ public final class Layout {
             if (y > contentTop) {
                 newPage();
             }
+        }
+
+        // The box's own margin is already in `y`, and its bottom margin would
+        // collapse against the break, so the measured height is the border box.
+        if (BreakInside.avoids(style)) {
+            ensureWhole(intrinsicHeight(block, innerWidth));
         }
 
         int startPage = pageIndex;
@@ -1065,7 +1087,7 @@ public final class Layout {
                 case ImageBox image -> images.resolve(image.source())
                         .map(index -> imageSize(image, index, width)[1])
                         .orElse(0f);
-                case TableBox table -> 0f;
+                case TableBox table -> TableLayout.measure(this, table, width);
             };
         }
         return height + edges;
