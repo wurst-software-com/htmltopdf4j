@@ -213,33 +213,87 @@ public final class ComputedStyle {
         record Absolute(Length length) implements LineHeight {}
     }
 
-    // --- Non-inherited box properties --------------------------------------
+    // --- Generic property access -------------------------------------------
+
+    /**
+     * The properties that inherit, beyond the ones with named accessors above.
+     *
+     * <p>Inheritance is a property of the property, not of the element, so it
+     * has to be listed somewhere. The box properties — margins, padding,
+     * borders, width, position — are deliberately absent: they do not inherit,
+     * and a box that silently took its parent's margin would be a hard bug to
+     * see.
+     */
+    private static final java.util.Set<String> INHERITED = java.util.Set.of(
+            "direction",
+            "letter-spacing",
+            "list-style-position",
+            "list-style-type",
+            "quotes",
+            "text-indent",
+            "text-transform",
+            "visibility",
+            "white-space",
+            "word-break",
+            "word-spacing",
+            "orphans",
+            "widows");
+
+    /**
+     * The computed value of a property: what was declared, or what was inherited
+     * when the property inherits and nothing was declared.
+     *
+     * <p>The explicit {@code inherit} and {@code initial} keywords are honoured
+     * here rather than in each accessor, so they work for every property at once.
+     */
+    public String value(String property) {
+        String declaredValue = declared.get(property);
+        if (declaredValue != null) {
+            String keyword = declaredValue.trim().toLowerCase(Locale.ROOT);
+            if (keyword.equals("initial")) {
+                return null;
+            }
+            if (!keyword.equals("inherit") && !keyword.equals("unset")) {
+                return declaredValue;
+            }
+            // `unset` means `inherit` for an inherited property and `initial`
+            // for every other one.
+            if (keyword.equals("unset") && !INHERITED.contains(property)) {
+                return null;
+            }
+            return parent != null ? parent.value(property) : null;
+        }
+        if (INHERITED.contains(property) && parent != null) {
+            return parent.value(property);
+        }
+        return null;
+    }
 
     public Optional<Length> length(String property) {
-        return Length.parse(declared.get(property));
+        return Length.parse(value(property));
     }
 
     /** A length property that may also be the keyword {@code auto}. */
     public boolean isAuto(String property) {
-        String value = declared.get(property);
-        return value != null && value.trim().equalsIgnoreCase("auto");
+        return keyword(property, "auto");
     }
 
     public boolean has(String property) {
-        return declared.containsKey(property);
+        return value(property) != null;
     }
 
-    /** The declared value of a property, for the few places a keyword is read directly. */
+    /** The computed value of a property, for the places a keyword is read directly. */
     public String raw(String property) {
-        return declared.get(property);
+        return value(property);
     }
 
     public String raw(String property, String fallback) {
-        return declared.getOrDefault(property, fallback);
+        String value = value(property);
+        return value != null ? value : fallback;
     }
 
     public boolean keyword(String property, String expected) {
-        String value = declared.get(property);
+        String value = value(property);
         return value != null && value.trim().equalsIgnoreCase(expected);
     }
 
