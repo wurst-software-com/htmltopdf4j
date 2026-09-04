@@ -33,6 +33,41 @@ final class TableLayout {
 
     private TableLayout() {}
 
+    /**
+     * Which column each cell starts in, once the cells spanning down from
+     * earlier rows have taken their columns.
+     *
+     * <p>A {@code rowspan} cell occupies its column in the rows below it, so the
+     * cells in those rows shift right. Without this a table with a spanning cell
+     * has every row after the first misaligned by one column.
+     */
+    private static List<int[]> columnStarts(TableBox table, int columnCount) {
+        List<int[]> starts = new ArrayList<>(table.rows().size());
+        int[] spannedFrom = new int[columnCount];
+        for (TableRow row : table.rows()) {
+            int[] rowStarts = new int[row.cells().size()];
+            int column = 0;
+            for (int i = 0; i < row.cells().size(); i++) {
+                while (column < columnCount && spannedFrom[column] > 0) {
+                    column++;
+                }
+                rowStarts[i] = Math.min(column, Math.max(0, columnCount - 1));
+                column += row.cells().get(i).columnSpan();
+            }
+            starts.add(rowStarts);
+            for (int i = 0; i < row.cells().size(); i++) {
+                TableCell cell = row.cells().get(i);
+                for (int c = rowStarts[i]; c < rowStarts[i] + cell.columnSpan() && c < columnCount; c++) {
+                    spannedFrom[c] = cell.rowSpan();
+                }
+            }
+            for (int c = 0; c < columnCount; c++) {
+                spannedFrom[c] = Math.max(0, spannedFrom[c] - 1);
+            }
+        }
+        return starts;
+    }
+
     static void layout(Layout layout, TableBox table, float left, float width) {
         int columnCount = table.columnCount();
         if (columnCount == 0 || table.rows().isEmpty()) {
@@ -43,34 +78,36 @@ final class TableLayout {
 
         float available = Math.max(1f, width - margin.horizontal());
         float[] columns = columnWidths(layout, table, columnCount, available);
+        List<int[]> starts = columnStarts(table, columnCount);
         List<TableRow> header = table.rows().stream()
                 .filter(row -> row.section() == TableRow.Section.HEADER)
                 .toList();
 
-        boolean headerDrawn = false;
-        int page = -1;
-        for (TableRow row : table.rows()) {
-            if (row.section() == TableRow.Section.HEADER && headerDrawn) {
+        // The header is drawn at the top of the table and again at the top of
+        // every Page the table continues onto.
+        boolean headerPending = !header.isEmpty();
+        for (int index = 0; index < table.rows().size(); index++) {
+            TableRow row = table.rows().get(index);
+            if (row.section() == TableRow.Section.HEADER && !headerPending) {
                 continue;
             }
-            float height = rowHeight(layout, row, columns);
+            float height = rowHeight(layout, row, columns, starts.get(index));
             if (layout.y() + height > layout.contentBottom() && layout.y() > layout.contentTop()) {
                 layout.breakPage();
-                page = -1;
+                headerPending = !header.isEmpty();
             }
-            if (page != -1 || header.isEmpty()) {
-                drawRow(layout, row, left + margin.left(), columns);
-            } else {
-                for (TableRow repeated : header) {
-                    drawRow(layout, repeated, left + margin.left(), columns);
+            if (headerPending) {
+                for (int i = 0; i < table.rows().size(); i++) {
+                    if (table.rows().get(i).section() == TableRow.Section.HEADER) {
+                        drawRow(layout, table.rows().get(i), left + margin.left(), columns, starts.get(i));
+                    }
                 }
-                headerDrawn = true;
-                page = 0;
-                if (row.section() != TableRow.Section.HEADER) {
-                    drawRow(layout, row, left + margin.left(), columns);
+                headerPending = false;
+                if (row.section() == TableRow.Section.HEADER) {
+                    continue;
                 }
             }
-            page = 0;
+            drawRow(layout, row, left + margin.left(), columns, starts.get(index));
         }
         layout.setY(layout.y() + margin.bottom());
     }
@@ -93,17 +130,19 @@ final class TableLayout {
                 return scale(widths, available / declared);
             }
         }
-        for (TableRow row : table.rows()) {
-            int column = 0;
-            for (TableCell cell : row.cells()) {
+        List<int[]> starts = columnStarts(table, count);
+        for (int r = 0; r < table.rows().size(); r++) {
+            TableRow row = table.rows().get(r);
+            for (int i = 0; i < row.cells().size(); i++) {
+                TableCell cell = row.cells().get(i);
                 float wanted = layout.measureIntrinsicWidth(cell.content(), available);
                 // A spanning cell contributes its share to each column it covers
                 // rather than forcing the first one wide.
                 float share = wanted / cell.columnSpan();
-                for (int i = 0; i < cell.columnSpan() && column + i < count; i++) {
-                    widths[column + i] = Math.max(widths[column + i], share);
+                int start = starts.get(r)[i];
+                for (int c = 0; c < cell.columnSpan() && start + c < count; c++) {
+                    widths[start + c] = Math.max(widths[start + c], share);
                 }
-                column += cell.columnSpan();
             }
         }
         float total = 0f;
@@ -124,21 +163,34 @@ final class TableLayout {
         return widths;
     }
 
-    private static float rowHeight(Layout layout, TableRow row, float[] columns) {
+    /**
+     * A row is as tall as its tallest cell. A cell spanning several rows
+     * contributes only its share, so one tall spanning cell does not inflate the
+     * first row it appears in.
+     */
+    private static float rowHeight(Layout layout, TableRow row, float[] columns, int[] starts) {
         float height = 0f;
-        int column = 0;
-        for (TableCell cell : row.cells()) {
-            float width = spanWidth(columns, column, cell.columnSpan());
+        for (int i = 0; i < row.cells().size(); i++) {
+            TableCell cell = row.cells().get(i);
+            float width = spanWidth(columns, starts[i], cell.columnSpan());
             Edges padding = Edges.padding(cell.content().style(), width);
-            height = Math.max(height,
-                    layout.measureChildren(cell.content(), Math.max(1f, width - padding.horizontal())));
-            column += cell.columnSpan();
+            float content = layout.measureChildren(
+                    cell.content(), Math.max(1f, width - padding.horizontal()));
+            height = Math.max(height, (content + padding.vertical()) / cell.rowSpan());
         }
         return Math.max(height, minimumRowHeight(row));
     }
 
     private static float minimumRowHeight(TableRow row) {
         return row.cells().isEmpty() ? 0f : row.cells().get(0).content().style().fontSize() * 1.4f;
+    }
+
+    private static float offset(float[] columns, int column) {
+        float x = 0f;
+        for (int i = 0; i < column && i < columns.length; i++) {
+            x += columns[i];
+        }
+        return x;
     }
 
     private static float spanWidth(float[] columns, int start, int span) {
@@ -149,28 +201,27 @@ final class TableLayout {
         return width;
     }
 
-    private static void drawRow(Layout layout, TableRow row, float left, float[] columns) {
+    private static void drawRow(Layout layout, TableRow row, float left, float[] columns, int[] starts) {
         float top = layout.y();
-        float height = rowHeight(layout, row, columns);
-        float x = left;
-        int column = 0;
+        float height = rowHeight(layout, row, columns, starts);
 
-        for (TableCell cell : row.cells()) {
-            float width = spanWidth(columns, column, cell.columnSpan());
+        for (int i = 0; i < row.cells().size(); i++) {
+            TableCell cell = row.cells().get(i);
+            float x = left + offset(columns, starts[i]);
+            float width = spanWidth(columns, starts[i], cell.columnSpan());
+            // A cell spanning rows is as tall as all of them together.
+            float cellHeight = height * cell.rowSpan();
             ComputedStyle style = cell.content().style();
             Edges padding = Edges.padding(style, width);
             Edges border = Edges.borderWidths(style);
 
-            paintCellDecoration(layout, style, x, top, width, height, border);
+            paintCellDecoration(layout, style, x, top, width, cellHeight, border);
 
             layout.setY(top + padding.top() + border.top());
             layout.flowChildren(
                     cell.content().children(),
                     x + padding.left() + border.left(),
                     Math.max(1f, width - padding.horizontal() - border.horizontal()));
-
-            x += width;
-            column += cell.columnSpan();
         }
         layout.setY(top + height);
     }

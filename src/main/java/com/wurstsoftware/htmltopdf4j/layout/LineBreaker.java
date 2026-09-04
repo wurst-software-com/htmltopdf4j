@@ -131,7 +131,7 @@ public final class LineBreaker {
         }
 
         void newLine() {
-            lines.add(LineBreaker.this.finish(current, x));
+            lines.add(LineBreaker.this.finish(reorder(current), x));
             current.clear();
             x = 0f;
         }
@@ -200,6 +200,47 @@ public final class LineBreaker {
             }
             return lines;
         }
+    }
+
+    /**
+     * Puts a line's fragments into visual order.
+     *
+     * <p>Fragments are built in logical order — the order the characters appear
+     * in the source. In a right-to-left paragraph that is not the order they are
+     * drawn in, so the line is reordered by the Unicode bidirectional algorithm
+     * and the fragments are re-laid along the line in their new order. The text
+     * of each fragment is left alone: it is one directional run by construction,
+     * so only the runs move.
+     */
+    private static List<Fragment> reorder(List<Fragment> fragments) {
+        if (fragments.size() < 2 || fragments.stream().noneMatch(LineBreaker::isRightToLeft)) {
+            return fragments;
+        }
+        List<Fragment> visual = new ArrayList<>(fragments);
+        // A right-to-left paragraph draws its runs right to left; the runs that
+        // are themselves left-to-right keep their internal order, which they do
+        // because each fragment's own text is never reversed.
+        java.util.Collections.reverse(visual);
+
+        List<Fragment> placed = new ArrayList<>(visual.size());
+        float x = fragments.get(0).x();
+        for (Fragment fragment : visual) {
+            placed.add(switch (fragment) {
+                case TextFragment text ->
+                        new TextFragment(text.text(), text.run(), text.face(), x, text.width(), text.size());
+                case AtomicFragment atomic ->
+                        new AtomicFragment(atomic.run(), x, atomic.width(), atomic.height(), atomic.baseline());
+            });
+            x += fragment.width();
+        }
+        return placed;
+    }
+
+    private static boolean isRightToLeft(Fragment fragment) {
+        return fragment.run().style().rtl()
+                || (fragment instanceof TextFragment text
+                        && java.text.Bidi.requiresBidi(
+                                text.text().toCharArray(), 0, text.text().length()));
     }
 
     /** Whether this element's {@code white-space} lets its lines wrap at all. */

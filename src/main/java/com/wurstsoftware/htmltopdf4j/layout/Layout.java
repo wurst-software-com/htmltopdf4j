@@ -68,6 +68,22 @@ public final class Layout {
     private final float contentTop;
     private final float contentBottom;
 
+    private final Floats floats = new Floats();
+
+    /**
+     * Boxes taken out of flow by {@code position: absolute} or {@code fixed},
+     * to be laid out after the in-flow content.
+     *
+     * <p>They are deferred rather than laid out where they are found because
+     * they paint above everything in flow, and because a {@code fixed} box has
+     * to be repeated on every Page — which needs the Page count.
+     */
+    private final List<Positioned> positioned = new ArrayList<>();
+
+    /** One out-of-flow box, with where it was found and how it stacks. */
+    private record Positioned(
+            BlockBox block, boolean fixed, int page, float top, float left, float width, int zIndex) {}
+
     private int pageIndex;
     private float y;
 
@@ -77,6 +93,7 @@ public final class Layout {
         this.faces = new FaceRegistry(options.defaultFace());
         this.images = new ImageLoader(options.baseDirectory().orElse(null));
         this.breaker = new LineBreaker(faces::indexFor, faces::chain, this::measureAtomic);
+        declareFontFaces(stylesheet, options.baseDirectory().orElse(null));
 
         Edges margins = pageMargins(stylesheet, options);
         this.pageMargins = margins;
@@ -94,10 +111,42 @@ public final class Layout {
         pages.add(new Page());
     }
 
+    /**
+     * Registers the Faces an {@code @font-face} rule declares, so a Document can
+     * ship its own font instead of hoping the machine has one.
+     *
+     * <p>Only local sources are read, for the same reason images are: a library
+     * that quietly fetched fonts over the network while rendering would be a
+     * surprising thing to embed in a server. A {@code src} this engine cannot
+     * read leaves the family unresolved, and the next family in the Cascade's
+     * list takes over.
+     */
+    private void declareFontFaces(Stylesheet stylesheet, java.nio.file.Path baseDirectory) {
+        for (Stylesheet.FontFaceRule rule : stylesheet.fontFaceRules()) {
+            String family = null;
+            String source = null;
+            for (com.wurstsoftware.htmltopdf4j.style.Declaration declaration : rule.declarations()) {
+                switch (declaration.property().toLowerCase(java.util.Locale.ROOT)) {
+                    case "font-family" -> family = declaration.value().trim().replaceAll("^['\"]|['\"]$", "");
+                    case "src" -> source = declaration.value();
+                    default -> { }
+                }
+            }
+            if (family == null || source == null) {
+                continue;
+            }
+            byte[] program = FontFaceSource.read(source, baseDirectory);
+            if (program != null) {
+                faces.declare(family, program);
+            }
+        }
+    }
+
     /** Flows a Document's Box tree onto Pages. */
     public static LayoutResult layout(BoxTree tree, Stylesheet stylesheet, RenderOptions options) {
         Layout layout = new Layout(options, stylesheet);
         layout.layoutChildren(tree.children(), layout.contentLeft, layout.contentWidth);
+        layout.layoutPositioned();
         return layout.result();
     }
 
@@ -153,6 +202,7 @@ public final class Layout {
             pages.add(new Page());
         }
         y = contentTop;
+        floats.retain(pageIndex);
     }
 
     /** Starts a new Page when {@code height} will not fit in what is left of this one. */
@@ -222,10 +272,38 @@ public final class Layout {
 
         y += Math.max(previousBottomMargin, margin.top());
 
+        String clear = style.raw("clear", "none").trim().toLowerCase(java.util.Locale.ROOT);
+        if (!clear.equals("none")) {
+            y = floats.clearance(pageIndex, y,
+                    clear.equals("left") || clear.equals("both"),
+                    clear.equals("right") || clear.equals("both"));
+        }
+
+        String position = style.raw("position", "static").trim().toLowerCase(java.util.Locale.ROOT);
+        if (position.equals("absolute") || position.equals("fixed")) {
+            positioned.add(new Positioned(
+                    block, position.equals("fixed"), pageIndex, y, left, width, zIndexOf(style)));
+            return previousBottomMargin;
+        }
+
+        String floated = style.raw("float", "none").trim().toLowerCase(java.util.Locale.ROOT);
+        if (floated.equals("left") || floated.equals("right")) {
+            layoutFloat(block, left, width, floated.equals("left"));
+            return 0f;
+        }
+
         float outerWidth = forcedWidth != null
                 ? Math.max(1f, forcedWidth)
                 : usedWidth(style, width, margin, padding, border);
-        float boxLeft = left + margin.left() + indent(style, width, outerWidth, margin);
+        // `relative` shifts the box and everything in it without changing where
+        // the flow below it goes, so the cursor is restored at the end.
+        float relativeX = position.equals("relative") ? offset(style, "left", "right", width) : 0f;
+        float relativeY = position.equals("relative")
+                ? offset(style, "top", "bottom", contentBottom - contentTop)
+                : 0f;
+        float flowY = y;
+        y += relativeY;
+        float boxLeft = left + relativeX + margin.left() + indent(style, width, outerWidth, margin);
         float contentX = boxLeft + border.left() + padding.left();
         float innerWidth = Math.max(1f, outerWidth - border.horizontal() - padding.horizontal());
 
@@ -281,6 +359,10 @@ public final class Layout {
 
         paintBoxDecoration(block, startPage, startY, startMark, boxLeft, outerWidth, border, padding);
 
+        y -= relativeY;
+        if (relativeY != 0f) {
+            y = Math.max(y, flowY);
+        }
         if (style.keyword("page-break-after", "always") || style.keyword("break-after", "page")) {
             newPage();
             return 0f;
@@ -309,6 +391,127 @@ public final class Layout {
         return style.keyword("box-sizing", "border-box")
                 ? declared
                 : declared + border.vertical() + padding.vertical();
+    }
+
+    /**
+     * Lays out the boxes taken out of flow, in stacking order, after everything
+     * in flow — so a positioned box paints above the content it overlaps.
+     */
+    private void layoutPositioned() {
+        List<Positioned> pending = new ArrayList<>(positioned);
+        positioned.clear();
+        pending.sort(java.util.Comparator.comparingInt(Positioned::zIndex));
+        for (Positioned box : pending) {
+            for (int page = 0; page < pages.size(); page++) {
+                if (!box.fixed() && page != box.page()) {
+                    continue;
+                }
+                // A fixed box repeats on every Page; an absolute one appears once.
+                pageIndex = page;
+                place(box);
+            }
+        }
+        // Boxes positioned inside positioned boxes are laid out in the same way.
+        if (!positioned.isEmpty()) {
+            layoutPositioned();
+        }
+    }
+
+    private void place(Positioned box) {
+        ComputedStyle style = box.block().style();
+        Edges margin = Edges.margin(style, box.width());
+        Edges padding = Edges.padding(style, box.width());
+        Edges border = Edges.borderWidths(style);
+
+        float containingHeight = contentBottom - contentTop;
+        float outerWidth = Math.clamp(
+                style.length("width")
+                        .map(declared -> borderBoxWidth(
+                                style, style.resolve(declared, box.width()), padding, border))
+                        .orElseGet(() -> Math.min(box.width(), intrinsicWidth(box.block(), box.width()))),
+                1f,
+                Math.max(1f, box.width()));
+        float usedWidth = outerWidth;
+
+        float boxLeft = style.length("left")
+                .map(left -> contentLeft + style.resolve(left, contentWidth))
+                .orElseGet(() -> style.length("right")
+                        .map(right -> contentLeft + contentWidth - usedWidth - style.resolve(right, contentWidth))
+                        .orElse(box.left()));
+        float top = style.length("top")
+                .map(value -> contentTop + style.resolve(value, containingHeight))
+                .orElseGet(() -> style.length("bottom")
+                        .map(value -> contentBottom - style.resolve(value, containingHeight)
+                                - intrinsicHeight(box.block(), usedWidth))
+                        .orElse(box.top()));
+
+        int startMark = page().mark();
+        y = top + border.top() + padding.top();
+        layoutChildren(box.block().children(),
+                boxLeft + border.left() + padding.left(),
+                Math.max(1f, outerWidth - border.horizontal() - padding.horizontal()));
+        y += padding.bottom() + border.bottom();
+        paintBoxDecoration(box.block(), pageIndex, top, startMark, boxLeft, outerWidth, border, padding);
+    }
+
+    /** A box offset, taking the start side when it has one and the end side otherwise. */
+    private static float offset(ComputedStyle style, String start, String end, float basis) {
+        return style.length(start)
+                .map(length -> style.resolve(length, basis))
+                .orElseGet(() -> -style.length(end).map(length -> style.resolve(length, basis)).orElse(0f));
+    }
+
+    /** {@code z-index: auto} stacks as zero, which is what CSS says. */
+    private static int zIndexOf(ComputedStyle style) {
+        try {
+            return Integer.parseInt(style.raw("z-index", "0").trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Places a floated block at one edge of its containing block and records the
+     * band it occupies, so the lines beside it are narrowed and a {@code clear}
+     * drops below it.
+     *
+     * <p>A float with no declared width is shrink-to-fit: as wide as its content
+     * wants, capped by the space available. The block flow cursor does not move,
+     * which is what taking a box out of flow means.
+     */
+    private void layoutFloat(BlockBox block, float left, float width, boolean toLeft) {
+        ComputedStyle style = block.style();
+        Edges margin = Edges.margin(style, width);
+        Edges padding = Edges.padding(style, width);
+        Edges border = Edges.borderWidths(style);
+
+        float available = width - margin.horizontal();
+        float outerWidth = style.length("width")
+                .map(declared -> borderBoxWidth(style, style.resolve(declared, width), padding, border))
+                .orElseGet(() -> Math.min(available, intrinsicWidth(block, available)));
+        outerWidth = Math.clamp(outerWidth, 1f, Math.max(1f, available));
+
+        float top = y;
+        float boxLeft = toLeft
+                ? floats.leftEdge(pageIndex, top, 1f, left) + margin.left()
+                : floats.rightEdge(pageIndex, top, 1f, left + width) - outerWidth - margin.right();
+
+        int startPage = pageIndex;
+        int startMark = page().mark();
+        anchor(block);
+        y += border.top() + padding.top();
+        layoutChildren(block.children(),
+                boxLeft + border.left() + padding.left(),
+                Math.max(1f, outerWidth - border.horizontal() - padding.horizontal()));
+        y += padding.bottom() + border.bottom();
+
+        float bottom = Math.max(y, top + style.length("height")
+                .map(height -> style.resolve(height, contentBottom - contentTop))
+                .orElse(0f));
+        paintBoxDecoration(block, startPage, top, startMark, boxLeft, outerWidth, border, padding);
+        floats.add(startPage, top, bottom + margin.bottom(),
+                toLeft ? boxLeft + outerWidth + margin.right() : boxLeft - margin.left(), toLeft);
+        y = top;
     }
 
     /**
@@ -537,15 +740,48 @@ public final class Layout {
         TextAlign align = style.textAlign() != null ? style.textAlign() : inheritedAlign;
         float indent = style.length("text-indent").map(length -> style.resolve(length, width)).orElse(0f);
 
-        for (LineBreaker.VisualLine visual : breaker.breakLines(line.runs(), width, indent)) {
+        // Lines are broken one at a time because the width available to each
+        // depends on the floats beside it, and that changes down the block.
+        List<InlineRun> remaining = line.runs();
+        float lineIndent = indent;
+        while (!remaining.isEmpty()) {
+            float lineLeft = floats.leftEdge(pageIndex, y, style.fontSize(), left);
+            float lineRight = floats.rightEdge(pageIndex, y, style.fontSize(), left + width);
+            float lineWidth = Math.max(1f, lineRight - lineLeft);
+
+            List<LineBreaker.VisualLine> broken = breaker.breakLines(remaining, lineWidth, lineIndent);
+            if (broken.isEmpty()) {
+                break;
+            }
+            LineBreaker.VisualLine visual = broken.get(0);
             ensureSpace(visual.height());
-            float offset = LineBreaker.alignmentOffset(align, visual.width(), width);
+            float offset = LineBreaker.alignmentOffset(align, visual.width(), lineWidth);
             float baseline = y + visual.leading() / 2f + visual.ascent();
             for (LineBreaker.Fragment fragment : visual.fragments()) {
-                emitFragment(fragment, left + offset, baseline);
+                emitFragment(fragment, lineLeft + offset, baseline);
             }
             y += visual.height();
+            lineIndent = 0f;
+            remaining = broken.size() == 1 ? List.of() : rest(broken);
         }
+    }
+
+    /**
+     * The content of every line after the first, as runs to be broken again at
+     * the next line's own width.
+     */
+    private static List<InlineRun> rest(List<LineBreaker.VisualLine> broken) {
+        List<InlineRun> remaining = new ArrayList<>();
+        for (int i = 1; i < broken.size(); i++) {
+            for (LineBreaker.Fragment fragment : broken.get(i).fragments()) {
+                remaining.add(switch (fragment) {
+                    case LineBreaker.TextFragment text ->
+                            InlineRun.text(text.text(), text.run().style(), text.run().link());
+                    case LineBreaker.AtomicFragment atomic -> atomic.run();
+                });
+            }
+        }
+        return remaining;
     }
 
     private void emitFragment(LineBreaker.Fragment fragment, float originX, float baseline) {
@@ -672,6 +908,20 @@ public final class Layout {
             return;
         }
         float[] size = imageSize(box, index.get(), width);
+        String floated = box.style().raw("float", "none").trim().toLowerCase(java.util.Locale.ROOT);
+        if (floated.equals("left") || floated.equals("right")) {
+            // A floated image is placed at its edge and the lines below narrow
+            // around it; the flow cursor does not move.
+            boolean toLeft = floated.equals("left");
+            Edges margin = Edges.margin(box.style(), width);
+            float imageLeft = toLeft
+                    ? floats.leftEdge(pageIndex, y, 1f, left) + margin.left()
+                    : floats.rightEdge(pageIndex, y, 1f, left + width) - size[0] - margin.right();
+            paintImage(box, imageLeft, y, size[0], size[1]);
+            floats.add(pageIndex, y, y + size[1] + margin.bottom(),
+                    toLeft ? imageLeft + size[0] + margin.right() : imageLeft - margin.left(), toLeft);
+            return;
+        }
         ensureSpace(size[1]);
         paintImage(box, left, y, size[0], size[1]);
         y += size[1];
