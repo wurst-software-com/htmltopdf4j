@@ -24,8 +24,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The sheet a Document is laid out on: its size, its margins, and the margin
- * boxes that carry the page furniture.
+ * What a Document's Pages are: their size, their margins, and the margin boxes
+ * that carry the page furniture.
  *
  * <p>All three come from the {@code @page} rules the Document selected, falling
  * back to what the caller asked for in {@link RenderOptions}. A rule with no
@@ -33,8 +33,8 @@ import java.util.Set;
  * it by name with the {@code page} property, so a stylesheet carrying a rule
  * nobody selected renders as though the rule were not there.
  *
- * <p>Only the Document-wide case is handled: {@code page} decides one sheet for
- * the whole render rather than switching sheet mid-flow, and the {@code :first},
+ * <p>Only the Document-wide case is handled: {@code page} decides one Page size
+ * for the whole render rather than changing it mid-flow, and the {@code :first},
  * {@code :left} and {@code :right} pseudo-classes are ignored, so a rule that
  * carries one applies to every Page as though it had none.
  */
@@ -77,9 +77,9 @@ record PageSetup(PageSize size, Edges margins, Map<String, List<Declaration>> ma
     }
 
     /**
-     * The sheet a {@code size} declaration names: a paper, an orientation, the
+     * The Page a {@code size} declaration names: a paper, an orientation, the
      * two together in either order, or the dimensions themselves. Anything else
-     * — {@code auto} included — leaves the caller's sheet alone.
+     * — {@code auto} included — leaves the caller's own Page size alone.
      */
     private static PageSize size(ComputedStyle style, PageSize fallback) {
         String declared = style.raw("size");
@@ -101,25 +101,31 @@ record PageSetup(PageSize size, Edges margins, Map<String, List<Declaration>> ma
             }
         }
         if (!lengths.isEmpty()) {
-            // Dimensions say which way round the sheet goes themselves, so an
+            // Dimensions say which way round the Page goes themselves, so an
             // orientation keyword beside them has nothing left to decide.
             float width = lengths.get(0);
             return new PageSize(width, lengths.size() > 1 ? lengths.get(1) : width);
         }
-        PageSize sheet = paper != null ? paper : fallback;
+        PageSize paperSize = paper != null ? paper : fallback;
         if (landscape == null) {
-            return sheet;
+            return paperSize;
         }
-        return landscape ? sheet.landscape() : sheet.portrait();
+        return landscape ? paperSize.landscape() : paperSize.portrait();
     }
 
     /**
      * Whether a rule was selected: either it names no page, or the Document
-     * asked for the page it names.
+     * asked for the page it names — and asked for that one only.
+     *
+     * <p>One Page size is chosen for the whole render, so a Document naming two
+     * different pages has no answer this can give: merging the two rules would
+     * produce a Page neither of them describes, and picking one would render
+     * half the Document on the wrong paper. Both are dropped instead, leaving
+     * the caller's own Page size and whatever rules named no page at all.
      */
     private static boolean applies(Stylesheet.PageRule rule, Set<String> selected) {
         String name = pageName(rule.selector());
-        return name.isEmpty() || selected.contains(name);
+        return name.isEmpty() || (selected.size() == 1 && selected.contains(name));
     }
 
     /** A {@code @page} selector reduced to the page it names, with any pseudo-class dropped. */
@@ -136,9 +142,9 @@ record PageSetup(PageSize size, Edges margins, Map<String, List<Declaration>> ma
      * The page names the Document asks for anywhere in its Box tree.
      *
      * <p>The whole tree is searched rather than the root alone because the
-     * {@code page} property is usually put on the element that wants the sheet —
-     * the wide table, not the Document. Switching sheet mid-flow is out of scope,
-     * so a Document that names two pages simply selects both rules.
+     * {@code page} property is usually put on the element that wants the Page —
+     * the wide table, not the Document. A name on the Document itself is found
+     * too, because {@code page} inherits.
      */
     private static Set<String> selectedPages(BoxTree tree) {
         Set<String> names = new LinkedHashSet<>();
@@ -162,7 +168,7 @@ record PageSetup(PageSize size, Edges margins, Map<String, List<Declaration>> ma
                     }
                 }
             }
-            // A line of text sits on whatever sheet its block chose; `page` on a
+            // A line of text sits on whatever Page its block chose; `page` on a
             // run of inline content selects nothing.
             case LineBox ignored -> { }
         }

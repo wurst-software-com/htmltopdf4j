@@ -6,7 +6,7 @@ import com.wurstsoftware.htmltopdf4j.PageSize;
 import org.junit.jupiter.api.Test;
 
 /**
- * What an {@code @page} rule decides: the sheet its {@code size} declaration
+ * What an {@code @page} rule decides: the Page size its {@code size} declaration
  * names, and the margins it declares — but only where the rule was selected.
  *
  * <p>A rule with no selector applies to every Page. A named one applies only
@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  */
 class PageRuleTest {
 
-    private static PageSize sheet(String head) {
+    private static PageSize pageSizeOf(String head) {
         return Laid.of("<html><head><style>" + head + "</style></head><body><p>TEXT</p></body></html>")
                 .pageSize();
     }
@@ -26,57 +26,57 @@ class PageRuleTest {
     }
 
     @Test
-    void anOrientationKeywordTurnsTheSheetOver() {
-        assertEquals(new PageSize(PageSize.A4.height(), PageSize.A4.width()), sheet("@page { size: landscape }"));
+    void anOrientationKeywordTurnsThePageOver() {
+        assertEquals(new PageSize(PageSize.A4.height(), PageSize.A4.width()), pageSizeOf("@page { size: landscape }"));
     }
 
     @Test
-    void aPortraitKeywordLeavesAPortraitSheetAlone() {
-        assertEquals(PageSize.A4, sheet("@page { size: portrait }"));
+    void aPortraitKeywordLeavesAPortraitPageAlone() {
+        assertEquals(PageSize.A4, pageSizeOf("@page { size: portrait }"));
     }
 
     @Test
     void aPaperNameChoosesThatPaper() {
-        PageSize a5 = sheet("@page { size: A5 }");
+        PageSize a5 = pageSizeOf("@page { size: A5 }");
         assertEquals(420f, a5.width(), 1f);
         assertEquals(595f, a5.height(), 1f);
     }
 
     @Test
     void aPaperNameAndAnOrientationBothCount() {
-        PageSize a5 = sheet("@page { size: A5 landscape }");
+        PageSize a5 = pageSizeOf("@page { size: A5 landscape }");
         assertEquals(595f, a5.width(), 1f);
         assertEquals(420f, a5.height(), 1f);
     }
 
     @Test
     void theOrientationMayComeFirst() {
-        PageSize a5 = sheet("@page { size: landscape A5 }");
+        PageSize a5 = pageSizeOf("@page { size: landscape A5 }");
         assertEquals(595f, a5.width(), 1f);
         assertEquals(420f, a5.height(), 1f);
     }
 
     @Test
-    void twoLengthsAreTheSheetItself() {
-        PageSize sheet = sheet("@page { size: 200mm 100mm }");
-        assertEquals(566.9f, sheet.width(), 0.5f);
-        assertEquals(283.5f, sheet.height(), 0.5f);
+    void twoLengthsAreThePageSizeItself() {
+        PageSize size = pageSizeOf("@page { size: 200mm 100mm }");
+        assertEquals(566.9f, size.width(), 0.5f);
+        assertEquals(283.5f, size.height(), 0.5f);
     }
 
     @Test
-    void oneLengthIsASquareSheet() {
-        PageSize sheet = sheet("@page { size: 300pt }");
-        assertEquals(new PageSize(300f, 300f), sheet);
+    void oneLengthIsASquarePage() {
+        PageSize size = pageSizeOf("@page { size: 300pt }");
+        assertEquals(new PageSize(300f, 300f), size);
     }
 
     @Test
-    void aSheetOfAutoIsTheCallersOwn() {
-        assertEquals(PageSize.A4, sheet("@page { size: auto }"));
+    void aSizeOfAutoIsTheCallersOwn() {
+        assertEquals(PageSize.A4, pageSizeOf("@page { size: auto }"));
     }
 
     @Test
-    void noSizeDeclarationLeavesTheCallersSheet() {
-        assertEquals(PageSize.A4, sheet("@page { margin: 20pt }"));
+    void noSizeDeclarationLeavesTheCallersPageSize() {
+        assertEquals(PageSize.A4, pageSizeOf("@page { margin: 20pt }"));
     }
 
     @Test
@@ -87,8 +87,8 @@ class PageRuleTest {
     }
 
     @Test
-    void aNamedRuleNothingSelectsDoesNotChooseTheSheet() {
-        assertEquals(PageSize.A4, sheet("@page nobody { size: landscape }"));
+    void aNamedRuleNothingSelectsDoesNotChooseThePageSize() {
+        assertEquals(PageSize.A4, pageSizeOf("@page nobody { size: landscape }"));
     }
 
     @Test
@@ -97,6 +97,27 @@ class PageRuleTest {
                 "<div style='page:wide'><p>TEXT</p></div>");
         assertEquals(842f, laid.pageSize().width(), 1f);
         assertEquals(200f, laid.text("TEXT").x(), 0.01f);
+    }
+
+    @Test
+    void aPageNamedOnTheBodyAppliesToTheDocument() {
+        Laid laid = Laid.of("<html><head><style>@page wide { size: landscape }</style></head>"
+                + "<body style='page:wide'><p>TEXT</p></body></html>");
+
+        assertEquals(842f, laid.pageSize().width(), 1f,
+                "`page` is inherited, so naming it on the body names it for everything in it");
+    }
+
+    @Test
+    void aDocumentThatNamesTwoPagesKeepsTheCallersPageSize() {
+        // One Page size is chosen for the whole render, so two named pages have no
+        // answer: neither rule applies, rather than half the Document being
+        // rendered on the wrong paper.
+        Laid laid = laid("@page a { size: A5 } @page b { size: landscape; margin-left: 200pt }",
+                "<div style='page:a'><p>ONE</p></div><div style='page:b'><p>TWO</p></div>");
+
+        assertEquals(PageSize.A4, laid.pageSize());
+        assertEquals(48f, laid.text("ONE").x(), 0.01f, "and neither rule's margins apply either");
     }
 
     @Test

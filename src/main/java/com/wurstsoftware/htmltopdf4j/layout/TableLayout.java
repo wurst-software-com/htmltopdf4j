@@ -200,7 +200,7 @@ final class TableLayout {
 
     /** The same, for a caller that has already worked out the row's baseline shifts. */
     private static float rowHeight(
-            Layout layout, TableRow row, float[] columns, int[] starts, float[] shifts) {
+            Layout layout, TableRow row, float[] columns, int[] starts, Baselines baselines) {
 
         float height = 0f;
         for (int i = 0; i < row.cells().size(); i++) {
@@ -211,7 +211,8 @@ final class TableLayout {
                     cell.content(), Math.max(1f, width - padding.horizontal()));
             // A cell dropped onto the row's baseline needs the room it was
             // dropped by as well, or the row's last line falls out of the bottom.
-            height = Math.max(height, (content + padding.vertical() + shifts[i]) / cell.rowSpan());
+            height = Math.max(height,
+                    (content + padding.vertical() + baselines.shift(i)) / cell.rowSpan());
         }
         return Math.max(height, minimumRowHeight(row));
     }
@@ -222,13 +223,11 @@ final class TableLayout {
      * it. A cell aligned some other way, or with no text to align, does not
      * move and does not vote.
      */
-    private static float[] baselineShifts(Layout layout, TableRow row, float[] columns, int[] starts) {
-        float[] baselines = new float[row.cells().size()];
-        float common = 0f;
+    private static Baselines baselineShifts(Layout layout, TableRow row, float[] columns, int[] starts) {
+        Baselines baselines = new Baselines(row.cells().size());
         for (int i = 0; i < row.cells().size(); i++) {
             TableCell cell = row.cells().get(i);
             ComputedStyle style = cell.content().style();
-            baselines[i] = Float.NaN;
             // A cell says nothing about `vertical-align` far more often than it
             // says `baseline`, and both mean the row's baseline.
             if (!Alignment.of(style, "vertical-align").orElse(Alignment.BASELINE).isBaseline()) {
@@ -240,15 +239,10 @@ final class TableLayout {
             float inner = Math.max(1f, width - padding.horizontal() - border.horizontal());
             float baseline = layout.firstBaseline(cell.content().children(), inner);
             if (!Float.isNaN(baseline)) {
-                baselines[i] = padding.top() + border.top() + baseline;
-                common = Math.max(common, baselines[i]);
+                baselines.measured(i, padding.top() + border.top() + baseline);
             }
         }
-        float[] shifts = new float[baselines.length];
-        for (int i = 0; i < baselines.length; i++) {
-            shifts[i] = Float.isNaN(baselines[i]) ? 0f : common - baselines[i];
-        }
-        return shifts;
+        return baselines;
     }
 
     private static float minimumRowHeight(TableRow row) {
@@ -273,8 +267,8 @@ final class TableLayout {
 
     private static void drawRow(Layout layout, TableRow row, float left, float[] columns, int[] starts) {
         float top = layout.y();
-        float[] shifts = baselineShifts(layout, row, columns, starts);
-        float height = rowHeight(layout, row, columns, starts, shifts);
+        Baselines baselines = baselineShifts(layout, row, columns, starts);
+        float height = rowHeight(layout, row, columns, starts, baselines);
 
         for (int i = 0; i < row.cells().size(); i++) {
             TableCell cell = row.cells().get(i);
@@ -293,12 +287,8 @@ final class TableLayout {
                     - padding.vertical()
                     - border.vertical()
                     - layout.measureChildren(cell.content(), inner);
-            // A baseline-aligned cell drops onto the row's baseline; the other
-            // keywords divide the room the content leaves over instead.
             layout.setY(top + padding.top() + border.top()
-                    + (shifts[i] > 0f
-                            ? shifts[i]
-                            : Alignment.of(style, "vertical-align").offset(free)));
+                    + baselines.offset(i, Alignment.of(style, "vertical-align"), free));
             layout.flowChildren(cell.content().children(), x + padding.left() + border.left(), inner);
         }
         layout.setY(top + height);

@@ -238,6 +238,9 @@ public final class ComputedStyle {
             "letter-spacing",
             "list-style-position",
             "list-style-type",
+            // `page` inherits, which is what lets a Document name its sheet once
+            // on the body rather than on every box that wants it.
+            "page",
             "quotes",
             "text-indent",
             "text-transform",

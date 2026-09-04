@@ -70,31 +70,55 @@ final class FlexLayout {
         // The lines are sized and measured before any of them is placed,
         // because `align-content` distributes what they leave over, and that is
         // not known until all of them have been measured.
-        List<float[]> sizes = new ArrayList<>();
-        float[] heights = new float[lines.size()];
-        for (int i = 0; i < lines.size(); i++) {
-            sizes.add(mainSizes(lines.get(i), width, columnGap));
-            heights[i] = lineHeight(layout, lines.get(i), sizes.get(i), style);
+        List<Measured> measured = new ArrayList<>();
+        for (List<Item> line : lines) {
+            measured.add(measure(layout, line, width, columnGap, style));
         }
 
-        float free = crossFree(layout, style, heights, rowGap, width);
+        float free = crossFree(layout, style, measured, rowGap, width);
         String alignContent = style.raw("align-content", "stretch").trim().toLowerCase(Locale.ROOT);
         if (alignContent.equals("stretch") && free > 0f) {
-            for (int i = 0; i < heights.length; i++) {
-                heights[i] += free / heights.length;
+            for (int i = 0; i < measured.size(); i++) {
+                measured.set(i, measured.get(i).grownBy(free / measured.size()));
             }
             free = 0f;
         }
 
-        float top = layout.y() + leadingSpace(alignContent, free, lines.size());
-        float between = rowGap + betweenSpace(alignContent, free, lines.size());
-        for (int i = 0; i < lines.size(); i++) {
+        float top = layout.y() + leadingSpace(alignContent, free, measured.size());
+        float between = rowGap + betweenSpace(alignContent, free, measured.size());
+        for (Measured line : measured) {
             layout.setY(top);
-            layoutLine(layout, lines.get(i), sizes.get(i), heights[i], style, left, width, columnGap,
-                    direction.reversed());
-            top = Math.max(layout.y(), top + heights[i]) + between;
+            layoutLine(layout, line, style, left, width, columnGap, direction.reversed());
+            top = Math.max(layout.y(), top + line.height()) + between;
         }
         layout.setY(top - between);
+    }
+
+    /**
+     * One flex line, measured: its items' main sizes, where each of them has to
+     * drop to share the line's baseline, and how tall that leaves the line.
+     */
+    private record Measured(List<Item> items, float[] sizes, Baselines baselines, float height) {
+
+        /** The same line, given a share of the room {@code align-content} had to distribute. */
+        Measured grownBy(float extra) {
+            return new Measured(items, sizes, baselines, height + extra);
+        }
+    }
+
+    private static Measured measure(
+            Layout layout, List<Item> line, float width, float gap, ComputedStyle container) {
+
+        float[] sizes = mainSizes(line, width, gap);
+        Baselines baselines = baselineShifts(layout, line, sizes, container);
+        float height = 0f;
+        for (int i = 0; i < line.size(); i++) {
+            // An item dropped onto the line's baseline reaches that much further
+            // down, so the line has to be tall enough for where it ended up.
+            height = Math.max(height,
+                    baselines.shift(i) + layout.measureChildren(line.get(i).box(), sizes[i]));
+        }
+        return new Measured(line, sizes, baselines, height);
     }
 
     /**
@@ -103,7 +127,7 @@ final class FlexLayout {
      * anything to distribute.
      */
     private static float crossFree(
-            Layout layout, ComputedStyle style, float[] heights, float rowGap, float width) {
+            Layout layout, ComputedStyle style, List<Measured> lines, float rowGap, float width) {
 
         // Percentage padding resolves against the containing width even on the
         // cross axis, so the container's own width is what it is measured in.
@@ -113,27 +137,11 @@ final class FlexLayout {
         if (declared <= 0f) {
             return 0f;
         }
-        float used = rowGap * (heights.length - 1);
-        for (float height : heights) {
-            used += height;
+        float used = rowGap * (lines.size() - 1);
+        for (Measured line : lines) {
+            used += line.height();
         }
         return Math.max(0f, declared - padding.vertical() - border.vertical() - used);
-    }
-
-    /** How tall a line is: as tall as the tallest item on it. */
-    private static float lineHeight(Layout layout, List<Item> line, float[] sizes, ComputedStyle container) {
-        return lineHeight(layout, line, sizes, baselineShifts(layout, line, sizes, container));
-    }
-
-    /** The same, for a caller that has already worked out the line's baseline shifts. */
-    private static float lineHeight(Layout layout, List<Item> line, float[] sizes, float[] shifts) {
-        float height = 0f;
-        for (int i = 0; i < line.size(); i++) {
-            // An item dropped onto the line's baseline reaches that much further
-            // down, so the line has to be tall enough for where it ended up.
-            height = Math.max(height, shifts[i] + layout.measureChildren(line.get(i).box(), sizes[i]));
-        }
-        return height;
     }
 
     /**
@@ -144,14 +152,12 @@ final class FlexLayout {
      * way: an item with no first line to align has nothing to drop and no vote
      * on where the common baseline is, and every other item stays where it was.
      */
-    private static float[] baselineShifts(
+    private static Baselines baselineShifts(
             Layout layout, List<Item> line, float[] sizes, ComputedStyle container) {
 
-        float[] baselines = new float[line.size()];
-        float common = 0f;
+        Baselines baselines = new Baselines(line.size());
         for (int i = 0; i < line.size(); i++) {
             BlockBox box = line.get(i).box();
-            baselines[i] = Float.NaN;
             if (!alignmentOf(box, container).isBaseline()) {
                 continue;
             }
@@ -161,15 +167,11 @@ final class FlexLayout {
             float inner = Math.max(1f, sizes[i] - padding.horizontal() - border.horizontal());
             float baseline = layout.firstBaseline(box.children(), inner);
             if (!Float.isNaN(baseline)) {
-                baselines[i] = Edges.margin(style, sizes[i]).top() + border.top() + padding.top() + baseline;
-                common = Math.max(common, baselines[i]);
+                baselines.measured(
+                        i, Edges.margin(style, sizes[i]).top() + border.top() + padding.top() + baseline);
             }
         }
-        float[] shifts = new float[baselines.length];
-        for (int i = 0; i < baselines.length; i++) {
-            shifts[i] = Float.isNaN(baselines[i]) ? 0f : common - baselines[i];
-        }
-        return shifts;
+        return baselines;
     }
 
     /**
@@ -254,15 +256,16 @@ final class FlexLayout {
 
     private static void layoutLine(
             Layout layout,
-            List<Item> line,
-            float[] sizes,
-            float lineHeight,
+            Measured measured,
             ComputedStyle container,
             float left,
             float width,
             float gap,
             boolean reversed) {
 
+        List<Item> line = measured.items();
+        float[] sizes = measured.sizes();
+        float lineHeight = measured.height();
         float total = gap * (line.size() - 1);
         for (int i = 0; i < sizes.length; i++) {
             total += sizes[i] + line.get(i).outerMargin();
@@ -286,7 +289,6 @@ final class FlexLayout {
             layout.ensureWhole(lineHeight);
         }
 
-        float[] shifts = baselineShifts(layout, line, sizes, container);
         float top = layout.y();
         float bottom = top;
         for (int index : order) {
@@ -296,10 +298,8 @@ final class FlexLayout {
             Alignment alignment = alignmentOf(box, container);
             boolean stretch = alignment.stretches();
             float free = lineHeight - layout.measureChildren(box, sizes[index]);
-            // A baseline-aligned item drops onto the line's baseline; the other
-            // keywords divide the room the item leaves over instead.
-            layout.setY(top + (stretch ? 0f
-                    : shifts[index] > 0f ? shifts[index] : alignment.offset(free)));
+            layout.setY(top
+                    + (stretch ? 0f : measured.baselines().offset(index, alignment, free)));
             layout.flowItem(box, x, width, sizes[index], stretch ? lineHeight : null);
             bottom = Math.max(bottom, layout.y());
             x += sizes[index] + line.get(index).outerMargin() + between;
