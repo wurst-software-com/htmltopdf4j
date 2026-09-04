@@ -30,6 +30,17 @@ import java.util.Optional;
  */
 public final class FaceRegistry {
 
+    /**
+     * One variant of one {@code @font-face} family: which family, and which of
+     * its four upright/slanted, light/heavy corners this program is.
+     */
+    private record Variant(String family, boolean bold, boolean italic) {
+
+        static Variant of(String family, boolean bold, boolean italic) {
+            return new Variant(family.trim().toLowerCase(Locale.ROOT), bold, italic);
+        }
+    }
+
     /** Faces loaded from disk, shared between renders and keyed by absolute path. */
     private static final Map<Path, EmbeddedFace> FILE_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -40,7 +51,7 @@ public final class FaceRegistry {
     private final List<FaceChain> chains = new ArrayList<>();
     private final List<Boolean> syntheticBold = new ArrayList<>();
     private final Map<String, Integer> byRequest = new HashMap<>();
-    private final Map<String, EmbeddedFace> declaredFaces = new LinkedHashMap<>();
+    private final Map<Variant, EmbeddedFace> declaredFaces = new LinkedHashMap<>();
     private final Face defaultFace;
 
     public FaceRegistry(FaceSource defaultSource) {
@@ -110,16 +121,12 @@ public final class FaceRegistry {
      */
     public void declare(String family, boolean bold, boolean italic, byte[] program) {
         try {
-            declaredFaces.put(declaredKey(family, bold, italic),
+            declaredFaces.put(Variant.of(family, bold, italic),
                     EmbeddedFace.fromBytes(program, family.trim()));
         } catch (RuntimeException e) {
             // A font-face the shaper cannot read leaves the family unresolved,
             // and the Cascade's next family in the list takes over.
         }
-    }
-
-    private static String declaredKey(String family, boolean bold, boolean italic) {
-        return family.trim().toLowerCase(Locale.ROOT) + "|" + bold + "|" + italic;
     }
 
     /**
@@ -128,19 +135,19 @@ public final class FaceRegistry {
      * that ships one file expects it used for every weight.
      */
     private EmbeddedFace declaredFace(String family, boolean bold, boolean italic) {
-        for (String key : List.of(
-                declaredKey(family, bold, italic),
-                declaredKey(family, bold, false),
-                declaredKey(family, false, italic),
-                declaredKey(family, false, false))) {
-            EmbeddedFace face = declaredFaces.get(key);
+        for (Variant variant : List.of(
+                Variant.of(family, bold, italic),
+                Variant.of(family, bold, false),
+                Variant.of(family, false, italic),
+                Variant.of(family, false, false))) {
+            EmbeddedFace face = declaredFaces.get(variant);
             if (face != null) {
                 return face;
             }
         }
-        String prefix = family.trim().toLowerCase(Locale.ROOT) + "|";
+        String wanted = family.trim().toLowerCase(Locale.ROOT);
         return declaredFaces.entrySet().stream()
-                .filter(entry -> entry.getKey().startsWith(prefix))
+                .filter(entry -> entry.getKey().family().equals(wanted))
                 .map(Map.Entry::getValue)
                 .findFirst()
                 .orElse(null);

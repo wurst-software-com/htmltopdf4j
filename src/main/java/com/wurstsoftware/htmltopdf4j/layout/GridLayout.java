@@ -29,22 +29,30 @@ final class GridLayout {
     private GridLayout() {}
 
     /**
-     * One declared track: a definite size in points, a fraction of what is left,
-     * or automatic.
-     *
-     * <p>Columns treat an automatic track as {@code 1fr}, because a column has
-     * the container's width to share. A row does not have a height to share
-     * unless one is declared, so the distinction has to survive parsing.
+     * One declared track. A track is one of exactly three things, so it is three
+     * types rather than three fields: encoding the choice in a
+     * {@code points}/{@code fraction}/{@code automatic} triple leaves states
+     * that mean nothing and forces every reader to know which combination is
+     * which.
      */
-    private record Track(float points, float fraction, boolean automatic) {
+    private sealed interface Track {
 
-        static final Track AUTO = new Track(0f, 1f, true);
+        /** A track of a size the declaration already fixed. */
+        record Definite(float points) implements Track {}
+
+        /** A track claiming a share of whatever the definite ones leave over. */
+        record Fractional(float fraction) implements Track {}
+
+        /** A track sized by what it holds. */
+        record Automatic() implements Track {}
+
+        Track AUTO = new Automatic();
 
         static Track of(String token, ComputedStyle style, float basis) {
             String value = token.trim().toLowerCase(Locale.ROOT);
             if (value.endsWith("fr")) {
                 try {
-                    return new Track(0f, Float.parseFloat(value.substring(0, value.length() - 2)), false);
+                    return new Fractional(Float.parseFloat(value.substring(0, value.length() - 2)));
                 } catch (NumberFormatException e) {
                     return AUTO;
                 }
@@ -53,7 +61,7 @@ final class GridLayout {
                 return AUTO;
             }
             return com.wurstsoftware.htmltopdf4j.style.Length.parse(value)
-                    .map(length -> new Track(style.resolve(length, basis), 0f, false))
+                    .map(length -> (Track) new Definite(style.resolve(length, basis)))
                     .orElse(AUTO);
         }
     }
@@ -73,7 +81,7 @@ final class GridLayout {
         Map<String, int[]> areas = areasOf(style);
         List<Track> declared = tracks(style, "grid-template-columns", width);
         int columnCount = Math.max(1, declared.isEmpty() ? impliedColumns(items, areas) : declared.size());
-        float[] columns = resolve(declared, columnCount, width, columnGap);
+        float[] columns = distribute(columnTracks(declared, columnCount), width, columnGap);
 
         List<Placement> placements = place(items, columnCount, areas);
         int rowCount = placements.stream().mapToInt(p -> p.row() + p.rowSpan()).max().orElse(1);
@@ -81,15 +89,17 @@ final class GridLayout {
         // A row's automatic height is the tallest of the items that start in it,
         // which is not known until they are measured.
         float[] content = new float[rowCount];
+        float[] measured = new float[items.size()];
         for (int i = 0; i < items.size(); i++) {
             Placement placement = placements.get(i);
             float itemWidth = span(columns, placement.column(), placement.columnSpan(), columnGap);
-            content[placement.row()] =
-                    Math.max(content[placement.row()], layout.measureChildren(items.get(i), itemWidth));
+            measured[i] = layout.measureChildren(items.get(i), itemWidth);
+            content[placement.row()] = Math.max(content[placement.row()], measured[i]);
         }
-        float[] rows = resolveRows(
-                tracks(style, "grid-template-rows", width), rowCount, content,
-                length(style, "height", 0f), rowGap);
+        float height = length(style, "height", 0f);
+        float[] rows = distribute(
+                rowTracks(tracks(style, "grid-template-rows", width), rowCount, content, height),
+                height, rowGap);
 
         float top = layout.y();
         float[] rowTops = new float[rowCount + 1];
@@ -104,92 +114,75 @@ final class GridLayout {
             float x = left + offset(columns, placement.column(), columnGap);
             float itemWidth = span(columns, placement.column(), placement.columnSpan(), columnGap);
             float track = span(rows, placement.row(), placement.rowSpan(), rowGap);
-            float free = track - layout.measureChildren(items.get(i), itemWidth);
+            float free = track - measured[i];
+            // `align-self` decides for one item, `align-items` for the rest.
+            String alignment = items.get(i).style().raw("align-self");
             layout.setY(rowTops[placement.row()]
-                    + shift(items.get(i).style().raw("align-self"), containerAlignment, free));
+                    + VerticalAlign.offset(alignment != null ? alignment : containerAlignment, free));
             layout.flowItem(items.get(i), x, width, itemWidth);
         }
         layout.setY(Math.max(top, rowTops[rowCount] - rowGap));
     }
 
     /**
-     * Row heights: the declared ones where they are definite, the content where
-     * the track is automatic, and a share of what the container's declared height
-     * leaves over for the {@code fr} ones.
+     * Track sizes: every definite track takes what it declared, and the
+     * fractional ones share what is left of {@code available} after the definite
+     * ones and the gaps are paid for.
+     *
+     * <p>Both axes end up here. They differ only in what an automatic track
+     * means, which each caller settles before calling.
      */
-    private static float[] resolveRows(
-            List<Track> declared, int count, float[] content, float height, float gap) {
-
-        float[] rows = new float[count];
-        float taken = 0f;
+    private static float[] distribute(List<Track> tracks, float available, float gap) {
+        float[] sizes = new float[tracks.size()];
+        float definite = 0f;
         float fractions = 0f;
-        for (int row = 0; row < count; row++) {
-            Track track = row < declared.size() ? declared.get(row) : Track.AUTO;
-            if (track.automatic() || declared.isEmpty()) {
-                rows[row] = content[row];
-            } else if (track.fraction() > 0f) {
+        for (int i = 0; i < tracks.size(); i++) {
+            if (tracks.get(i) instanceof Track.Definite track) {
+                sizes[i] = track.points();
+                definite += track.points();
+            } else if (tracks.get(i) instanceof Track.Fractional track) {
                 fractions += track.fraction();
-                continue;
-            } else {
-                rows[row] = track.points();
             }
-            taken += rows[row];
         }
         if (fractions <= 0f) {
-            return rows;
+            return sizes;
         }
-
-        float free = height - taken - gap * (count - 1);
-        for (int row = 0; row < count; row++) {
-            Track track = row < declared.size() ? declared.get(row) : Track.AUTO;
-            if (!track.automatic() && track.fraction() > 0f) {
-                // With no declared height there is nothing to be a fraction of,
-                // so the row falls back to its content rather than to zero.
-                rows[row] = free > 0f ? free * (track.fraction() / fractions) : content[row];
+        float free = Math.max(0f, available - definite - gap * (tracks.size() - 1));
+        for (int i = 0; i < tracks.size(); i++) {
+            if (tracks.get(i) instanceof Track.Fractional track) {
+                sizes[i] += free * (track.fraction() / fractions);
             }
         }
-        return rows;
+        return sizes;
     }
 
     /**
-     * How far down its row an item starts. {@code align-self} decides for one
-     * item, {@code align-items} for the rest; {@code stretch} and {@code start}
-     * both leave the item at the top, which is where it already is.
+     * The column tracks, padded to {@code count}. A column has the container's
+     * width to share, so an automatic column is a fraction of it.
      */
-    private static float shift(String self, String container, float free) {
-        if (free <= 0f) {
-            return 0f;
-        }
-        String alignment = self != null ? self : container;
-        if (alignment == null) {
-            return 0f;
-        }
-        return switch (alignment.trim().toLowerCase(Locale.ROOT)) {
-            case "center" -> free / 2f;
-            case "end", "flex-end", "self-end" -> free;
-            default -> 0f;
-        };
-    }
-
-    /** Splits the free space among the {@code fr} tracks after the definite ones are paid for. */
-    private static float[] resolve(List<Track> declared, int count, float width, float gap) {
-        float[] widths = new float[count];
-        float definite = 0f;
-        float fractions = 0f;
+    private static List<Track> columnTracks(List<Track> declared, int count) {
+        List<Track> tracks = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             Track track = i < declared.size() ? declared.get(i) : Track.AUTO;
-            widths[i] = track.points();
-            definite += track.points();
-            fractions += track.fraction();
+            tracks.add(track instanceof Track.Automatic ? new Track.Fractional(1f) : track);
         }
-        float free = Math.max(0f, width - definite - gap * (count - 1));
-        if (fractions > 0f) {
-            for (int i = 0; i < count; i++) {
-                Track track = i < declared.size() ? declared.get(i) : Track.AUTO;
-                widths[i] += free * (track.fraction() / fractions);
-            }
+        return tracks;
+    }
+
+    /**
+     * The row tracks, padded to {@code count}. An automatic row is as tall as
+     * what it holds; so is a fractional one when the container declares no
+     * height, because a fraction needs something to be a fraction of.
+     */
+    private static List<Track> rowTracks(List<Track> declared, int count, float[] content, float height) {
+        List<Track> tracks = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            Track track = i < declared.size() ? declared.get(i) : Track.AUTO;
+            boolean sizeless = track instanceof Track.Automatic
+                    || (track instanceof Track.Fractional && height <= 0f);
+            tracks.add(sizeless ? new Track.Definite(content[i]) : track);
         }
-        return widths;
+        return tracks;
     }
 
     private static List<Track> tracks(ComputedStyle style, String property, float basis) {

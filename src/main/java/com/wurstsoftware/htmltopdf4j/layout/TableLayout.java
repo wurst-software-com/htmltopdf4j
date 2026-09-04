@@ -221,32 +221,13 @@ final class TableLayout {
                     - padding.vertical()
                     - border.vertical()
                     - layout.measureChildren(cell.content(), inner);
-            layout.setY(top + padding.top() + border.top() + verticalShift(style, free));
+            // `top` and `baseline` both leave a single-line cell where it already
+            // is, which is what the Expectations were recorded against.
+            layout.setY(top + padding.top() + border.top()
+                    + VerticalAlign.offset(style.raw("vertical-align"), free));
             layout.flowChildren(cell.content().children(), x + padding.left() + border.left(), inner);
         }
         layout.setY(top + height);
-    }
-
-    /**
-     * How far down a cell's content starts, given the room left over in the row.
-     *
-     * <p>Only {@code middle} and {@code bottom} move anything: {@code top} and
-     * {@code baseline} both leave a single-line cell where it already is, which
-     * is what the Expectations were recorded against.
-     */
-    private static float verticalShift(ComputedStyle style, float free) {
-        if (free <= 0f) {
-            return 0f;
-        }
-        String alignment = style.raw("vertical-align");
-        if (alignment == null) {
-            return 0f;
-        }
-        return switch (alignment.trim().toLowerCase(java.util.Locale.ROOT)) {
-            case "middle" -> free / 2f;
-            case "bottom" -> free;
-            default -> 0f;
-        };
     }
 
     private static void paintCellDecoration(

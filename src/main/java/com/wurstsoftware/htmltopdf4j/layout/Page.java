@@ -1,7 +1,6 @@
 package com.wurstsoftware.htmltopdf4j.layout;
 
 import com.wurstsoftware.htmltopdf4j.paint.PaintCommand;
-import com.wurstsoftware.htmltopdf4j.paint.Rect;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,34 +34,12 @@ public final class Page {
      * one phrase and the gaps between the words would not be clickable.
      */
     public void addLink(LinkArea area) {
-        LinkArea previous = linkAreas.isEmpty() ? null : linkAreas.get(linkAreas.size() - 1);
-        if (previous != null && joins(previous, area)) {
-            linkAreas.set(linkAreas.size() - 1, join(previous, area));
+        int last = linkAreas.size() - 1;
+        if (last >= 0 && linkAreas.get(last).adjoins(area)) {
+            linkAreas.set(last, linkAreas.get(last).and(area));
             return;
         }
         linkAreas.add(area);
-    }
-
-    private static boolean joins(LinkArea previous, LinkArea next) {
-        Rect before = previous.rect();
-        Rect after = next.rect();
-        return previous.link() == next.link()
-                && Math.abs(before.y() - after.y()) < 0.01f
-                // Word runs are separated by the space between them, which is
-                // well under half the line; a further-off run is a second line
-                // or a second link and keeps its own rectangle.
-                && after.x() >= before.x()
-                && after.x() - (before.x() + before.width()) < before.height() * 0.5f;
-    }
-
-    private static LinkArea join(LinkArea previous, LinkArea next) {
-        Rect before = previous.rect();
-        Rect after = next.rect();
-        float right = Math.max(before.x() + before.width(), after.x() + after.width());
-        return new LinkArea(
-                new Rect(before.x(), before.y(), right - before.x(),
-                        Math.max(before.height(), after.height())),
-                previous.link());
     }
 
     public void addAnchor(AnchorMark anchor) {
