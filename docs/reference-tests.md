@@ -5,7 +5,7 @@ they be ported where they assert behaviour the render seam cannot reach, and
 dropped where they assert internal structure this design does not reproduce.
 This is that accounting: every one is in exactly one row below.
 
-The Java suite is **509 tests**, of which 41 are the Fixtures. It is larger than
+The Java suite is **515 tests**, of which 41 are the Fixtures. It is larger than
 the reference's because a hand translation needs its own tests at the seams the
 translation introduced — `Woff`, `FontLibrary`, `FaceRegistry`, `Laid` — not
 because the reference was under-tested.
