@@ -1,5 +1,6 @@
 package com.wurstsoftware.htmltopdf4j.layout;
 
+import com.wurstsoftware.htmltopdf4j.text.FontLibrary;
 import com.wurstsoftware.htmltopdf4j.text.Woff;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -39,8 +40,9 @@ final class FontFaceSource {
     private static byte[] readOne(String alternative, Path baseDirectory) {
         String lower = alternative.toLowerCase(Locale.ROOT);
         if (lower.startsWith("local(")) {
-            String family = unquote(argumentOf(alternative));
-            return com.wurstsoftware.htmltopdf4j.text.FontLibrary.find(family, false, false)
+            // `local()` names a face, not a family: `local("Arial Bold")` is a
+            // full name, which the family index has no key for.
+            return FontLibrary.local(unquote(argumentOf(alternative)))
                     .map(entry -> readFile(entry.path()))
                     .orElse(null);
         }

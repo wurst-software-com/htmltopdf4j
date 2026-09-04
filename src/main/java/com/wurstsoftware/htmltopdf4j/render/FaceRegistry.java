@@ -102,10 +102,15 @@ public final class FaceRegistry {
      * Registers a Face declared by an {@code @font-face} rule. A declared family
      * beats an installed one of the same name, which is what lets a Document
      * ship its own font.
+     *
+     * <p>A family may be declared several times, once per variant: the rule's
+     * {@code font-weight} and {@code font-style} descriptors say which one this
+     * program is, so a second rule can supply the real bold rather than
+     * replacing the regular.
      */
-    public void declare(String family, byte[] program) {
+    public void declare(String family, boolean bold, boolean italic, byte[] program) {
         try {
-            declaredFaces.put(family.trim().toLowerCase(Locale.ROOT),
+            declaredFaces.put(declaredKey(family, bold, italic),
                     EmbeddedFace.fromBytes(program, family.trim()));
         } catch (RuntimeException e) {
             // A font-face the shaper cannot read leaves the family unresolved,
@@ -113,9 +118,37 @@ public final class FaceRegistry {
         }
     }
 
+    private static String declaredKey(String family, boolean bold, boolean italic) {
+        return family.trim().toLowerCase(Locale.ROOT) + "|" + bold + "|" + italic;
+    }
+
+    /**
+     * The declared Face closest to what was asked for: the exact variant, then
+     * the upright regular, then whatever the family declared at all — a Document
+     * that ships one file expects it used for every weight.
+     */
+    private EmbeddedFace declaredFace(String family, boolean bold, boolean italic) {
+        for (String key : List.of(
+                declaredKey(family, bold, italic),
+                declaredKey(family, bold, false),
+                declaredKey(family, false, italic),
+                declaredKey(family, false, false))) {
+            EmbeddedFace face = declaredFaces.get(key);
+            if (face != null) {
+                return face;
+            }
+        }
+        String prefix = family.trim().toLowerCase(Locale.ROOT) + "|";
+        return declaredFaces.entrySet().stream()
+                .filter(entry -> entry.getKey().startsWith(prefix))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
+    }
+
     private Face resolve(List<String> families, boolean bold, boolean italic) {
         for (String family : families) {
-            EmbeddedFace declared = declaredFaces.get(family.trim().toLowerCase(Locale.ROOT));
+            EmbeddedFace declared = declaredFace(family, bold, italic);
             if (declared != null) {
                 return declared;
             }

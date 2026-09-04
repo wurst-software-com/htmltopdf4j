@@ -132,4 +132,34 @@ class FontLibraryTest {
         assertTrue(FontLibrary.find(family, true, false).orElseThrow().bold());
         assertTrue(!FontLibrary.find(family, false, false).orElseThrow().bold());
     }
+
+    @Test
+    void localMatchesAFullFontNameAndNotOnlyAFamily() {
+        // `local()` in an @font-face names a face, not a family: "Arial Bold"
+        // is a full name that no family index would ever have a key for.
+        java.util.Map<String, java.util.List<FontLibrary.Entry>> index = FontLibrary.index();
+        org.junit.jupiter.api.Assumptions.assumeFalse(index.isEmpty(), "no system fonts installed");
+
+        for (java.util.List<FontLibrary.Entry> entries : index.values()) {
+            for (FontLibrary.Entry entry : entries) {
+                for (String name : entry.names()) {
+                    assertTrue(FontLibrary.local(name).isPresent(), name + " should resolve");
+                }
+            }
+        }
+    }
+
+    @Test
+    void localFallsBackToTheFamilyIndexForAPlainFamilyName() {
+        java.util.Map<String, java.util.List<FontLibrary.Entry>> index = FontLibrary.index();
+        org.junit.jupiter.api.Assumptions.assumeFalse(index.isEmpty(), "no system fonts installed");
+        String family = index.values().iterator().next().get(0).family();
+
+        assertTrue(FontLibrary.local(family).isPresent());
+    }
+
+    @Test
+    void localFindsNothingForANameNoFaceCarries() {
+        assertTrue(FontLibrary.local("No Such Face Anywhere At All").isEmpty());
+    }
 }

@@ -40,8 +40,17 @@ public final class FontLibrary {
             "ui-monospace", List.of("dejavu sans mono", "liberation mono"),
             "emoji", List.of("noto color emoji", "noto emoji", "symbola"));
 
-    /** One installed font file, and the family and style its name table declares. */
-    public record Entry(Path path, String family, boolean bold, boolean italic) {
+    /**
+     * One installed font file, and the family and style its name table declares.
+     *
+     * @param names the face's own names — its full name and its PostScript name
+     *     — which are what an {@code @font-face} {@code local()} refers to
+     */
+    public record Entry(Path path, String family, boolean bold, boolean italic, List<String> names) {
+
+        public Entry {
+            names = List.copyOf(names);
+        }
 
         /**
          * How badly this entry misses a requested style. Lower is better, so a
@@ -54,22 +63,56 @@ public final class FontLibrary {
     }
 
     private static volatile Map<String, List<Entry>> index;
+    private static volatile Map<String, Entry> byName;
 
     private FontLibrary() {}
 
     /** Every installed font, keyed by lower-case family name. */
     public static Map<String, List<Entry>> index() {
-        Map<String, List<Entry>> current = index;
-        if (current == null) {
+        ensureScanned();
+        return index;
+    }
+
+    /**
+     * The Face an {@code @font-face} {@code local()} names.
+     *
+     * <p>{@code local()} names a face, not a family — {@code local("Arial Bold")}
+     * is a full name that a family index has no key for — so the face's own
+     * names are tried first and the family index is the fallback.
+     */
+    public static Optional<Entry> local(String name) {
+        ensureScanned();
+        String key = key(name);
+        Entry named = byName.get(key);
+        return named != null ? Optional.of(named) : find(name, false, false);
+    }
+
+    private static void ensureScanned() {
+        if (index == null) {
             synchronized (FontLibrary.class) {
-                current = index;
-                if (current == null) {
-                    current = scan();
-                    index = current;
+                if (index == null) {
+                    Map<String, List<Entry>> scanned = scan();
+                    byName = nameIndex(scanned);
+                    index = scanned;
                 }
             }
         }
-        return current;
+    }
+
+    private static Map<String, Entry> nameIndex(Map<String, List<Entry>> families) {
+        Map<String, Entry> named = new HashMap<>();
+        for (List<Entry> entries : families.values()) {
+            for (Entry entry : entries) {
+                for (String name : entry.names()) {
+                    named.putIfAbsent(key(name), entry);
+                }
+            }
+        }
+        return Map.copyOf(named);
+    }
+
+    private static String key(String name) {
+        return name.trim().toLowerCase(Locale.ROOT).replaceAll("^['\"]|['\"]$", "").trim();
     }
 
     /**
@@ -77,7 +120,7 @@ public final class FontLibrary {
      * Generic families resolve through their candidate lists.
      */
     public static Optional<Entry> find(String family, boolean bold, boolean italic) {
-        String key = family.trim().toLowerCase(Locale.ROOT).replaceAll("^['\"]|['\"]$", "").trim();
+        String key = key(family);
         List<String> candidates = GENERIC_FAMILIES.getOrDefault(key, List.of(key));
         for (String candidate : candidates) {
             Optional<Entry> match = best(index().get(candidate), bold, italic);
@@ -144,6 +187,21 @@ public final class FontLibrary {
         return (name.endsWith(".ttf") || name.endsWith(".otf")) && Files.isRegularFile(path);
     }
 
+    /** The face's own names, which are what a {@code local()} can refer to. */
+    private static List<String> namesOf(TrueTypeFont font) throws IOException {
+        List<String> names = new ArrayList<>(3);
+        for (String name : List.of(
+                String.valueOf(font.getNaming().getFontFamily()) + " "
+                        + String.valueOf(font.getNaming().getFontSubFamily()),
+                String.valueOf(font.getNaming().getPostScriptName()))) {
+            String trimmed = name.trim();
+            if (!trimmed.isBlank() && !trimmed.contains("null") && !names.contains(trimmed)) {
+                names.add(trimmed);
+            }
+        }
+        return names;
+    }
+
     private static void add(Map<String, List<Entry>> found, Path path) {
         try (TrueTypeFont font = new TTFParser(true).parse(
                 new org.apache.pdfbox.io.RandomAccessReadBufferedFile(path.toFile()))) {
@@ -157,7 +215,8 @@ public final class FontLibrary {
                     path,
                     family.trim(),
                     style.contains("bold") || font.getHeader().getMacStyle() % 2 == 1,
-                    style.contains("italic") || style.contains("oblique"));
+                    style.contains("italic") || style.contains("oblique"),
+                    namesOf(font));
             found.computeIfAbsent(family.trim().toLowerCase(Locale.ROOT), key -> new ArrayList<>()).add(entry);
         } catch (IOException | RuntimeException e) {
             // A font this parser cannot read is simply not offered.

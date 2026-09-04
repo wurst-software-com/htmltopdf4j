@@ -125,10 +125,18 @@ public final class Layout {
         for (Stylesheet.FontFaceRule rule : stylesheet.fontFaceRules()) {
             String family = null;
             String source = null;
+            boolean bold = false;
+            boolean italic = false;
             for (com.wurstsoftware.htmltopdf4j.style.Declaration declaration : rule.declarations()) {
+                String value = declaration.value().trim().toLowerCase(java.util.Locale.ROOT);
                 switch (declaration.property().toLowerCase(java.util.Locale.ROOT)) {
                     case "font-family" -> family = declaration.value().trim().replaceAll("^['\"]|['\"]$", "");
                     case "src" -> source = declaration.value();
+                    // The descriptors say which variant of the family this
+                    // program is, so a second rule supplies the real bold
+                    // instead of replacing the regular.
+                    case "font-weight" -> bold = isBold(value);
+                    case "font-style" -> italic = value.startsWith("italic") || value.startsWith("oblique");
                     default -> { }
                 }
             }
@@ -137,8 +145,22 @@ public final class Layout {
             }
             byte[] program = FontFaceSource.read(source, baseDirectory);
             if (program != null) {
-                faces.declare(family, program);
+                faces.declare(family, bold, italic, program);
             }
+        }
+    }
+
+    /** Whether an {@code @font-face} weight descriptor names a bold variant. */
+    private static boolean isBold(String value) {
+        if (value.startsWith("bold")) {
+            return true;
+        }
+        try {
+            // A range such as `400 700` is bold if it reaches that far.
+            String last = value.split("\\s+")[value.split("\\s+").length - 1];
+            return Integer.parseInt(last) >= 600;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 

@@ -114,7 +114,7 @@ class FaceRegistryTest {
                 FontLibrary.find(family, false, false).orElseThrow().path());
 
         FaceRegistry faces = registry();
-        faces.declare("Brand", program);
+        faces.declare("Brand", false, false, program);
         int declared = faces.indexFor(style(Map.of("font-family", "Brand")));
 
         assertEquals("Brand", faces.chain(declared).primary().name());
@@ -123,7 +123,7 @@ class FaceRegistryTest {
     @Test
     void aFontFaceProgramTheShaperCannotReadLeavesTheFamilyUnresolved() {
         FaceRegistry faces = registry();
-        faces.declare("Broken", new byte[] {1, 2, 3});
+        faces.declare("Broken", false, false, new byte[] {1, 2, 3});
 
         int index = faces.indexFor(style(Map.of("font-family", "Broken")));
         assertEquals(faces.defaultFace(), faces.chain(index).primary());
@@ -136,5 +136,40 @@ class FaceRegistryTest {
         faces.indexFor(style(Map.of("font-family", "Nonesuch")));
 
         assertEquals(1, chains.size(), "the returned list should not grow behind the caller's back");
+    }
+
+    @Test
+    void aSecondFontFaceRuleSuppliesTheRealBoldVariant() throws IOException {
+        String family = familyWithRealBold().orElse(null);
+        Assumptions.assumeTrue(family != null, "no installed family ships a real bold");
+        byte[] regular = Files.readAllBytes(FontLibrary.find(family, false, false).orElseThrow().path());
+        byte[] bold = Files.readAllBytes(FontLibrary.find(family, true, false).orElseThrow().path());
+
+        FaceRegistry faces = registry();
+        faces.declare("Brand", false, false, regular);
+        faces.declare("Brand", true, false, bold);
+
+        int upright = faces.indexFor(style(Map.of("font-family", "Brand")));
+        int heavy = faces.indexFor(style(Map.of("font-family", "Brand", "font-weight", "bold")));
+        assertTrue(faces.chain(heavy).primary().bold(), "the bold rule should supply a real bold Face");
+        assertFalse(faces.chain(upright).primary().bold());
+        assertFalse(faces.syntheticBold(heavy), "a real bold Face must not also be stroked");
+    }
+
+    @Test
+    void aFamilyDeclaredOnlyOnceServesEveryWeightItWasNotGiven() throws IOException {
+        String family = FontLibrary.index().values().stream()
+                .map(entries -> entries.get(0).family())
+                .findFirst()
+                .orElse(null);
+        Assumptions.assumeTrue(family != null, "no system fonts installed");
+        byte[] program = Files.readAllBytes(FontLibrary.find(family, false, false).orElseThrow().path());
+
+        FaceRegistry faces = registry();
+        faces.declare("Brand", false, false, program);
+        int heavy = faces.indexFor(style(Map.of("font-family", "Brand", "font-weight", "bold")));
+
+        assertEquals("Brand", faces.chain(heavy).primary().name());
+        assertTrue(faces.syntheticBold(heavy), "with no real bold declared the writer has to fake it");
     }
 }
