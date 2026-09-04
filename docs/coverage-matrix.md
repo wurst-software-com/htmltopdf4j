@@ -4,7 +4,7 @@ What this engine renders, per HTML element and CSS feature: **Full**, **Partial*
 or **None**. "Partial" always says what is missing.
 
 This is the honest state of the port, not a roadmap. It is written against the
-code, and the Parity harness — 44 Fixtures, one JUnit case each — is what keeps
+code, and the Parity harness — 46 Fixtures, one JUnit case each — is what keeps
 it from drifting. Where a row says Full, there is a Fixture or a unit test that
 would fail if it stopped being true.
 
@@ -126,10 +126,10 @@ byte-identical output. Anything outside that is None here and stays None.
 | `position: sticky` | None | |
 | `z-index` | Full | Positioned boxes are painted in a post-pass sorted by z-index |
 | Flexbox: `flex-direction`, `flex-wrap`, `flex`, `flex-grow/shrink/basis`, `justify-content`, `order`, `gap` | Full | Inline children of a flex container are blockified |
-| Flexbox: `align-items`, `align-content`, `align-self` | None | Items are stretched to the line whatever the value says |
+| Flexbox: `align-items`, `align-content`, `align-self` | Partial | `stretch` (the initial value), `flex-start`/`start`, `center` and `flex-end`/`end` are honoured, with `align-self` overriding `align-items` per item. `align-content` distributes the lines of a wrapped container that declared a height. `baseline` is treated as a start alignment: there is no cross-item baseline table |
 | Grid: `grid-template-columns` (lengths, `fr`, `repeat()`), `grid-template-areas`, `grid-column`, `grid-row`, `grid-area`, `gap` | Full | Definite tracks first, then `fr` shares the remainder; row-major placement |
 | Grid: `grid-template-rows` (lengths, `fr`, `auto`) | Full | An `fr` row shares the container's declared `height`; with no declared height it is content-sized, because a fraction needs something to be a fraction of |
-| Grid: `align-items`, `align-self` | Partial | `center`/`middle` and `end`/`flex-end`/`self-end` place the item in its row; `stretch`, the initial value, leaves it content-sized rather than growing it to the track |
+| Grid: `align-items`, `align-self` | Full | `stretch`, the initial value, grows an item to its track unless it declared a height of its own; `center`/`middle` and `end`/`flex-end`/`self-end` place it in the row instead, and `align-self` overrides `align-items` per item |
 | Grid: `grid-auto-flow`, `grid-auto-rows`, `minmax()` | None | Rows not named by a track are sized to their content |
 | Tables: automatic column widths, `colspan`, `rowspan`, header and footer groups | Full | A rowspan occupancy grid keeps the rows below a spanning cell aligned |
 | Tables: per-side cell borders | Full | A cell declaring only `border-bottom` gets one line under it, through the same per-side stroking blocks use |
@@ -182,7 +182,7 @@ byte-identical output. Anything outside that is None here and stays None.
 ## Environment dependence
 
 The known-failures ledger (`src/test/resources/parity-known-failures.txt`) is
-**empty**: all 44 Fixtures meet their Expectations. The mechanism stays, because
+**empty**: all 46 Fixtures meet their Expectations. The mechanism stays, because
 it can only shrink — a listed Fixture that starts passing fails the build — but
 it currently lists nothing.
 

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { margin: 28.8pt; }
+  body { font-size: 11pt; }
+  .row { display: flex; gap: 8pt; margin-bottom: 14pt; }
+  .row > div { background: #eef3f8; border: 0.5pt solid #b9d3e8; padding: 4pt; }
+  .tall { height: 80pt; width: 120pt; }
+  .short { width: 120pt; }
+  .centred { align-items: center; }
+  .ended { align-items: flex-end; }
+  .wrapped { display: flex; flex-wrap: wrap; align-content: center;
+             height: 220pt; width: 260pt; gap: 6pt; border: 0.5pt solid #999; }
+  .wrapped > div { width: 120pt; background: #fff0c0; padding: 4pt; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="tall">Stretchtall</div>
+    <div class="short">Stretchshort</div>
+  </div>
+
+  <div class="row centred">
+    <div class="tall">Centretall</div>
+    <div class="short">Centreshort</div>
+    <div class="short" style="align-self: flex-start">Selfstart</div>
+  </div>
+
+  <div class="row ended">
+    <div class="tall">Endtall</div>
+    <div class="short">Endshort</div>
+  </div>
+
+  <div class="wrapped">
+    <div>Wrapone</div>
+    <div>Wraptwo</div>
+    <div>Wrapthree</div>
+    <div>Wrapfour</div>
+  </div>
+</body>
+</html>

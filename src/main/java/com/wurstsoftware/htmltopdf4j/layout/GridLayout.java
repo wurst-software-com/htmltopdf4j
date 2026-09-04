@@ -131,10 +131,15 @@ final class GridLayout {
                 float track = span(rows, placement.row(), placement.rowSpan(), rowGap);
                 float free = track - measured[i];
                 // `align-self` decides for one item, `align-items` for the rest.
-                String alignment = items.get(i).style().raw("align-self");
+                String self = items.get(i).style().raw("align-self");
+                String alignment = self != null && !VerticalAlign.isAuto(self) ? self : containerAlignment;
+                // `stretch` is not an offset: it makes the item as tall as its
+                // track, which is why it needs the track height and not the
+                // room the item leaves over.
+                boolean stretch = VerticalAlign.stretches(alignment);
                 layout.setY(rowTops[placement.row()]
-                        + VerticalAlign.offset(alignment != null ? alignment : containerAlignment, free));
-                layout.flowItem(items.get(i), x, width, itemWidth);
+                        + (stretch ? 0f : VerticalAlign.offset(alignment, free)));
+                layout.flowItem(items.get(i), x, width, itemWidth, stretch ? track : null);
             }
         }
         layout.setY(rowTops[rowCount] - rowGap);

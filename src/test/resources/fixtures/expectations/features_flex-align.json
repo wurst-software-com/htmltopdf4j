@@ -1,0 +1,18 @@
+{
+  "fixture": "flex-align",
+  "layer": "features",
+  "description": "align-items, align-self and align-content on a flex container: a stretched row, a centred one with a per-item override, an end-aligned one, and a wrapped container whose lines are centred in a declared height. Authored here rather than ported: the reference engine implements these properties, but this port's corpus carries no Expectation for them.",
+  "pdf_assertions": {
+    "must_contain_operators": ["BT", "ET", "re", "S"],
+    "must_contain_text": ["Stretchshort", "Centreshort", "Selfstart", "Endshort", "Wrapone", "Wrapfour"],
+    "min_size_bytes": 700,
+    "max_size_bytes": 2000000,
+    "min_pages": 1
+  },
+  "visual_assertions": [
+    "In the first row both boxes are the same height: the short one is stretched to the tall one.",
+    "In the second row the short box is its own height and vertically centred against the tall one, while the box marked Selfstart sits at the top of the row.",
+    "In the third row the short box sits at the foot of the row.",
+    "The wrapped container holds two lines of two boxes, and the pair of lines is centred vertically in the bordered container with space above and below."
+  ]
+}

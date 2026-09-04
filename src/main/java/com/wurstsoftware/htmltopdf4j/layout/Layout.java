@@ -255,16 +255,25 @@ public final class Layout {
      * what keeps consecutive paragraphs one margin apart instead of two.
      */
     private float layoutBlock(BlockBox block, float left, float width, float previousBottomMargin) {
-        return layoutBlock(block, left, width, previousBottomMargin, null);
+        return layoutBlock(block, left, width, previousBottomMargin, null, null);
     }
 
     /**
      * @param forcedWidth the border-box width to use instead of the one the
      *     block's own style would give it, or {@code null}. A flex or grid item's
      *     width is decided by its container, not by itself.
+     * @param stretchedHeight the border-box height the block is stretched to
+     *     fill, or {@code null}. This is what {@code align-items: stretch} means:
+     *     a floor under the height, not a ceiling, so content that overruns the
+     *     track still makes the box taller.
      */
     private float layoutBlock(
-            BlockBox block, float left, float width, float previousBottomMargin, Float forcedWidth) {
+            BlockBox block,
+            float left,
+            float width,
+            float previousBottomMargin,
+            Float forcedWidth,
+            Float stretchedHeight) {
 
         ComputedStyle style = block.style();
         if (style.display() == Display.NONE) {
@@ -338,6 +347,7 @@ public final class Layout {
                 GridLayout.layout(this, block, contentX, innerWidth);
             }
             y += padding.bottom() + border.bottom();
+            applyMinimumHeight(style, stretchedHeight, padding, border, startPage, startY);
             paintBoxDecoration(block, startPage, startY, startMark, boxLeft, outerWidth, border, padding);
             return margin.bottom();
         }
@@ -353,19 +363,7 @@ public final class Layout {
         layoutChildren(block.children(), contentX, innerWidth);
         y += padding.bottom() + border.bottom();
 
-        // `height` on a block that overflows it behaves as a minimum here, so
-        // `min-height` is the same rule under a different name and the taller of
-        // the two wins.
-        float minimumHeight = Math.max(
-                style.length("height")
-                        .map(height -> style.resolve(height, contentBottom - contentTop))
-                        .orElse(0f),
-                style.length("min-height")
-                        .map(height -> style.resolve(height, contentBottom - contentTop))
-                        .orElse(0f));
-        if (pageIndex == startPage && y - startY < minimumHeight) {
-            y = startY + minimumHeight;
-        }
+        applyMinimumHeight(style, stretchedHeight, padding, border, startPage, startY);
         if (clipHeight > 0f) {
             page().add(new PaintCommand.PopClip());
             if (pageIndex == startPage) {
@@ -1259,6 +1257,36 @@ public final class Layout {
         return Math.max(declared, height + edges);
     }
 
+    /**
+     * Grows the box to the height it was promised, if its content left it
+     * shorter than that.
+     *
+     * <p>{@code height} on a block that overflows it behaves as a minimum, so
+     * {@code min-height} is the same rule under a different name and the taller
+     * of the two wins. A stretch is a third source of the same floor, and
+     * applies only to a box that declared no height of its own — and it is
+     * already a border-box height, because a track measures border boxes.
+     */
+    private void applyMinimumHeight(
+            ComputedStyle style,
+            Float stretchedHeight,
+            Edges padding,
+            Edges border,
+            int startPage,
+            float startY) {
+
+        float declared = Math.max(lengthOf(style, "height"), lengthOf(style, "min-height"));
+        if (declared > 0f && !style.keyword("box-sizing", "border-box")) {
+            declared += padding.vertical() + border.vertical();
+        }
+        float minimumHeight = Math.max(
+                stretchedHeight != null && style.length("height").isEmpty() ? stretchedHeight : 0f,
+                declared);
+        if (pageIndex == startPage && y - startY < minimumHeight) {
+            y = startY + minimumHeight;
+        }
+    }
+
     /** A vertical length in points, or zero when it is not declared. */
     private float lengthOf(ComputedStyle style, String property) {
         return style.length(property)
@@ -1310,7 +1338,17 @@ public final class Layout {
 
     /** Lays one block out at a width its container decided, as a flex or grid item does. */
     void flowItem(BlockBox item, float left, float containingWidth, Float itemWidth) {
-        layoutBlock(item, left, containingWidth, 0f, itemWidth);
+        flowItem(item, left, containingWidth, itemWidth, null);
+    }
+
+    /**
+     * @param stretchedHeight the height of the flex line or grid track the item
+     *     is stretched to fill, or {@code null} when it is aligned rather than
+     *     stretched
+     */
+    void flowItem(
+            BlockBox item, float left, float containingWidth, Float itemWidth, Float stretchedHeight) {
+        layoutBlock(item, left, containingWidth, 0f, itemWidth, stretchedHeight);
     }
 
     float measureChildren(BlockBox block, float width) {

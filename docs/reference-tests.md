@@ -5,11 +5,9 @@ they be ported where they assert behaviour the render seam cannot reach, and
 dropped where they assert internal structure this design does not reproduce.
 This is that accounting: every one is in exactly one row below.
 
-The Java suite is **547 tests**, of which 44 are the Fixtures — 41 ported from
-the reference corpus plus `features/break-inside`, `features/float-break` and
-`features/inline-decoration`, which are this port's own, because the reference
-engine implements no break properties at all, paginates a float wrongly and
-paints no inline decoration. It is larger than
+The Java suite is **558 tests**, of which 46 are the Fixtures — 41 ported from
+the reference corpus plus five this port authored itself, each of which says in
+its Expectation why it had no reference Expectation to port. It is larger than
 the reference's because a hand translation needs its own tests at the seams the
 translation introduced — `Woff`, `FontLibrary`, `FaceRegistry`, `Laid` — not
 because the reference was under-tested.

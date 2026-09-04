@@ -20,6 +20,28 @@ final class VerticalAlign {
     private VerticalAlign() {}
 
     /**
+     * Whether this keyword grows the box rather than moving it. {@code stretch}
+     * is the initial value of {@code align-items}, so an absent one stretches
+     * too, and {@code baseline} is treated as a start alignment: the port has no
+     * cross-container baseline table, and starting is what it looks like for the
+     * single-line items a paged Document actually carries.
+     */
+    /** {@code align-self: auto} defers to the container, which is the default. */
+    static boolean isAuto(String keyword) {
+        return keyword == null || keyword.isBlank() || keyword.trim().equalsIgnoreCase("auto");
+    }
+
+    static boolean stretches(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return true;
+        }
+        return switch (keyword.trim().toLowerCase(Locale.ROOT)) {
+            case "stretch", "normal", "auto" -> true;
+            default -> false;
+        };
+    }
+
+    /**
      * How far down to start, given the room the content leaves over. Negative or
      * zero free space means the content fills the box and cannot move.
      */

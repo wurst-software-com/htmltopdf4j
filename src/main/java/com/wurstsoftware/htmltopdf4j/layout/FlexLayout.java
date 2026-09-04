@@ -61,11 +61,69 @@ final class FlexLayout {
 
         boolean wraps = !style.raw("flex-wrap", "nowrap").trim().toLowerCase(Locale.ROOT).equals("nowrap");
         List<Item> items = children.stream().map(child -> item(layout, child, width)).toList();
-        for (List<Item> line : lines(items, width, columnGap, wraps)) {
-            layoutLine(layout, line, style, left, width, columnGap, direction.reversed());
-            layout.setY(layout.y() + rowGap);
+        List<List<Item>> lines = lines(items, width, columnGap, wraps);
+
+        // The lines are sized and measured before any of them is placed,
+        // because `align-content` distributes what they leave over, and that is
+        // not known until all of them have been measured.
+        List<float[]> sizes = new ArrayList<>();
+        float[] heights = new float[lines.size()];
+        for (int i = 0; i < lines.size(); i++) {
+            sizes.add(mainSizes(lines.get(i), width, columnGap));
+            heights[i] = lineHeight(layout, lines.get(i), sizes.get(i));
         }
-        layout.setY(layout.y() - rowGap);
+
+        float free = crossFree(layout, style, heights, rowGap);
+        String alignContent = style.raw("align-content", "stretch").trim().toLowerCase(Locale.ROOT);
+        if (alignContent.equals("stretch") && free > 0f) {
+            for (int i = 0; i < heights.length; i++) {
+                heights[i] += free / heights.length;
+            }
+            free = 0f;
+        }
+
+        float top = layout.y() + leadingSpace(alignContent, free, lines.size());
+        float between = rowGap + betweenSpace(alignContent, free, lines.size());
+        for (int i = 0; i < lines.size(); i++) {
+            layout.setY(top);
+            layoutLine(layout, lines.get(i), sizes.get(i), heights[i], style, left, width, columnGap,
+                    direction.reversed());
+            top = Math.max(layout.y(), top + heights[i]) + between;
+        }
+        layout.setY(top - between);
+    }
+
+    /**
+     * The room a container with a declared height leaves over once its lines
+     * have taken theirs — which is the only case {@code align-content} has
+     * anything to distribute.
+     */
+    private static float crossFree(Layout layout, ComputedStyle style, float[] heights, float rowGap) {
+        float declared = style.length("height")
+                .map(length -> style.resolve(length, layout.contentBottom() - layout.contentTop()))
+                .orElse(0f);
+        if (declared <= 0f) {
+            return 0f;
+        }
+        float used = rowGap * (heights.length - 1);
+        for (float height : heights) {
+            used += height;
+        }
+        Edges padding = Edges.padding(style, declared);
+        Edges border = Edges.borderWidths(style);
+        float inner = style.keyword("box-sizing", "border-box")
+                ? declared - padding.vertical() - border.vertical()
+                : declared;
+        return Math.max(0f, inner - used);
+    }
+
+    /** How tall a line is: as tall as the tallest item on it. */
+    private static float lineHeight(Layout layout, List<Item> line, float[] sizes) {
+        float height = 0f;
+        for (int i = 0; i < line.size(); i++) {
+            height = Math.max(height, layout.measureChildren(line.get(i).box(), sizes[i]));
+        }
+        return height;
     }
 
     /** A column container stacks its items, which is what block flow already does. */
@@ -115,15 +173,7 @@ final class FlexLayout {
      * neither keeps its base size, which is what makes a fixed sidebar beside a
      * growing body work.
      */
-    private static void layoutLine(
-            Layout layout,
-            List<Item> line,
-            ComputedStyle container,
-            float left,
-            float width,
-            float gap,
-            boolean reversed) {
-
+    private static float[] mainSizes(List<Item> line, float width, float gap) {
         float used = 0f;
         float grow = 0f;
         float shrink = 0f;
@@ -145,6 +195,19 @@ final class FlexLayout {
             }
             sizes[i] = item.resolved(extra);
         }
+        return sizes;
+    }
+
+    private static void layoutLine(
+            Layout layout,
+            List<Item> line,
+            float[] sizes,
+            float lineHeight,
+            ComputedStyle container,
+            float left,
+            float width,
+            float gap,
+            boolean reversed) {
 
         float total = gap * (line.size() - 1);
         for (int i = 0; i < sizes.length; i++) {
@@ -166,22 +229,26 @@ final class FlexLayout {
         // A line whose items ask to stay whole moves as a unit, for the same
         // reason a grid row does: half a line on each Page is nobody's intent.
         if (line.stream().anyMatch(item -> BreakInside.avoids(item.box().style()))) {
-            float lineHeight = 0f;
-            for (int i = 0; i < line.size(); i++) {
-                lineHeight = Math.max(lineHeight, layout.measureChildren(line.get(i).box(), sizes[i]));
-            }
             layout.ensureWhole(lineHeight);
         }
 
+        String containerAlignment = container.raw("align-items");
         float top = layout.y();
         float bottom = top;
         for (int index : order) {
-            layout.setY(top);
-            layout.flowItem(line.get(index).box(), x, width, sizes[index]);
+            BlockBox box = line.get(index).box();
+            // `align-self` decides for one item, `align-items` for the rest, and
+            // `stretch` is a height rather than an offset.
+            String self = box.style().raw("align-self");
+            String alignment = VerticalAlign.isAuto(self) ? containerAlignment : self;
+            boolean stretch = VerticalAlign.stretches(alignment);
+            float free = lineHeight - layout.measureChildren(box, sizes[index]);
+            layout.setY(top + (stretch ? 0f : VerticalAlign.offset(alignment, free)));
+            layout.flowItem(box, x, width, sizes[index], stretch ? lineHeight : null);
             bottom = Math.max(bottom, layout.y());
             x += sizes[index] + line.get(index).outerMargin() + between;
         }
-        layout.setY(bottom);
+        layout.setY(Math.max(bottom, top + lineHeight));
     }
 
     private static float leadingSpace(String justify, float slack, int count) {

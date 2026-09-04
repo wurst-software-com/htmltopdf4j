@@ -98,16 +98,14 @@ Expectation files.
 ## Building
 
 ```
-mvn test        # 547 tests, including 44 Fixtures against their Expectations
+mvn test        # 558 tests, including 46 Fixtures against their Expectations
 ```
 
 Java 21 is required to build and to run.
 
-All 44 Fixtures pass — 41 ported from the reference corpus, plus
-`features/break-inside`, `features/float-break` and
-`features/inline-decoration`, which are this port's own: the reference engine
-implements no break properties, paginates a float wrongly and paints no inline
-decoration, so none of them had an Expectation worth porting.
+All 46 Fixtures pass — 41 ported from the reference corpus, plus five this
+port authored itself, each of which says in its Expectation why it had no
+reference Expectation to port.
 
 `src/test/resources/parity-known-failures.txt` — the ledger that reports a
 listed Fixture as skipped rather than failed — is empty.

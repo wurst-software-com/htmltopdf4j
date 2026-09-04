@@ -1,0 +1,18 @@
+{
+  "fixture": "grid-stretch",
+  "layer": "features",
+  "description": "align-items: stretch is the initial value of a grid item, so an item shorter than its track fills it; align-self overrides that per item, and an item with a declared height keeps it. Authored here rather than ported: this port's corpus carries no reference Expectation for grid cross-axis alignment.",
+  "pdf_assertions": {
+    "must_contain_operators": ["BT", "ET", "re", "S"],
+    "must_contain_text": ["Stretchone", "Centretwo", "Endthree", "Ownfour"],
+    "min_size_bytes": 700,
+    "max_size_bytes": 2000000,
+    "min_pages": 1
+  },
+  "visual_assertions": [
+    "The first item's bordered box fills its whole 100pt track.",
+    "The second item's box is only as tall as its text and sits in the middle of its track.",
+    "The third item's box sits at the foot of its track.",
+    "The fourth item's box is about 50pt tall — its declared 40pt plus its padding — at the top of its track, because it declared a height of its own."
+  ]
+}
