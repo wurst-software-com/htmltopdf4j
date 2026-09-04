@@ -23,13 +23,36 @@ final class FontFaceSource {
 
     private FontFaceSource() {}
 
+    /** The containers this engine can open, as an {@code src} format hint names them. */
+    private static final java.util.Set<String> SUPPORTED_FORMATS = java.util.Set.of(
+            "truetype", "opentype", "woff", "truetype-variations", "opentype-variations");
+
+    /**
+     * One alternative of a {@code src} list: the function that names the program,
+     * and the {@code format()} hint that follows it, if any.
+     */
+    private record Alternative(String function, String format) {
+
+        /**
+         * Whether this alternative is worth reading. A hint naming a container
+         * this engine cannot open — {@code woff2}, {@code svg}, {@code eot} —
+         * means the chain moves on without fetching the bytes at all.
+         */
+        boolean isReadable() {
+            return format == null || SUPPORTED_FORMATS.contains(format);
+        }
+    }
+
     /** The font program, or {@code null} when none of the alternatives can be read. */
     static byte[] read(String source, Path baseDirectory) {
-        for (String alternative : split(source)) {
-            // The format hint is only a hint, so the container is decided by the
-            // bytes: WOFF1 is unwrapped, a bare SFNT passes through, and
-            // anything else is treated as an alternative that could not be read.
-            byte[] program = Woff.decode(readOne(alternative.trim(), baseDirectory));
+        for (Alternative alternative : split(source)) {
+            if (!alternative.isReadable()) {
+                continue;
+            }
+            // A hint is only a hint, so an alternative that survives it still has
+            // its container decided by the bytes: WOFF1 is unwrapped, a bare SFNT
+            // passes through, and anything else counts as unreadable.
+            byte[] program = Woff.decode(readOne(alternative.function(), baseDirectory));
             if (program != null) {
                 return program;
             }
@@ -96,7 +119,7 @@ final class FontFaceSource {
     }
 
     /** Splits the alternatives, ignoring the commas inside a {@code data:} URI or a format list. */
-    private static java.util.List<String> split(String source) {
+    private static java.util.List<Alternative> split(String source) {
         java.util.List<String> parts = new java.util.ArrayList<>();
         int depth = 0;
         int start = 0;
@@ -112,8 +135,17 @@ final class FontFaceSource {
             }
         }
         parts.add(source.substring(start));
-        // `url(x) format("woff")` names one alternative; the format hint is not a
-        // source and only the function before it is read.
-        return parts.stream().map(part -> part.trim().split("\\s+format", 2)[0]).toList();
+        // `url(x) format("woff")` names one alternative: the function before the
+        // hint says where the program is, the hint says whether to bother.
+        return parts.stream().map(FontFaceSource::alternativeOf).toList();
+    }
+
+    private static Alternative alternativeOf(String part) {
+        String[] halves = part.trim().split("\\s+format", 2);
+        if (halves.length < 2) {
+            return new Alternative(halves[0].trim(), null);
+        }
+        String hint = unquote(argumentOf("format" + halves[1])).toLowerCase(Locale.ROOT);
+        return new Alternative(halves[0].trim(), hint.isEmpty() ? null : hint);
     }
 }

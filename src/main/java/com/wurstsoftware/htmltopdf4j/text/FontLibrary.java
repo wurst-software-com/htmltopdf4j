@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.apache.fontbox.ttf.NameRecord;
 import org.apache.fontbox.ttf.TTFParser;
 import org.apache.fontbox.ttf.TrueTypeFont;
 
@@ -187,19 +188,39 @@ public final class FontLibrary {
         return (name.endsWith(".ttf") || name.endsWith(".otf")) && Files.isRegularFile(path);
     }
 
-    /** The face's own names, which are what a {@code local()} can refer to. */
+    /**
+     * The face's own names, which are what a {@code local()} can refer to: the
+     * full names and PostScript names its {@code name} table declares, in
+     * whatever languages it declares them.
+     *
+     * <p>A family plus its subfamily is added as well, because that is the name
+     * a stylesheet author writes — {@code local("Arial Bold")} — even for a face
+     * whose declared full name reads differently.
+     */
     private static List<String> namesOf(TrueTypeFont font) throws IOException {
-        List<String> names = new ArrayList<>(3);
-        for (String name : List.of(
-                String.valueOf(font.getNaming().getFontFamily()) + " "
-                        + String.valueOf(font.getNaming().getFontSubFamily()),
-                String.valueOf(font.getNaming().getPostScriptName()))) {
-            String trimmed = name.trim();
-            if (!trimmed.isBlank() && !trimmed.contains("null") && !names.contains(trimmed)) {
-                names.add(trimmed);
+        List<String> names = new ArrayList<>();
+        for (NameRecord record : font.getNaming().getNameRecords()) {
+            if (record.getNameId() == NameRecord.NAME_FULL_FONT_NAME
+                    || record.getNameId() == NameRecord.NAME_POSTSCRIPT_NAME) {
+                add(names, record.getString());
             }
         }
+        String family = font.getNaming().getFontFamily();
+        String subFamily = font.getNaming().getFontSubFamily();
+        if (family != null && subFamily != null) {
+            add(names, family.trim() + " " + subFamily.trim());
+        }
         return names;
+    }
+
+    private static void add(List<String> names, String name) {
+        if (name == null) {
+            return;
+        }
+        String trimmed = name.trim();
+        if (!trimmed.isBlank() && !names.contains(trimmed)) {
+            names.add(trimmed);
+        }
     }
 
     private static void add(Map<String, List<Entry>> found, Path path) {

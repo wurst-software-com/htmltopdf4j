@@ -122,45 +122,11 @@ public final class Layout {
      * list takes over.
      */
     private void declareFontFaces(Stylesheet stylesheet, java.nio.file.Path baseDirectory) {
-        for (Stylesheet.FontFaceRule rule : stylesheet.fontFaceRules()) {
-            String family = null;
-            String source = null;
-            boolean bold = false;
-            boolean italic = false;
-            for (com.wurstsoftware.htmltopdf4j.style.Declaration declaration : rule.declarations()) {
-                String value = declaration.value().trim().toLowerCase(java.util.Locale.ROOT);
-                switch (declaration.property().toLowerCase(java.util.Locale.ROOT)) {
-                    case "font-family" -> family = declaration.value().trim().replaceAll("^['\"]|['\"]$", "");
-                    case "src" -> source = declaration.value();
-                    // The descriptors say which variant of the family this
-                    // program is, so a second rule supplies the real bold
-                    // instead of replacing the regular.
-                    case "font-weight" -> bold = isBold(value);
-                    case "font-style" -> italic = value.startsWith("italic") || value.startsWith("oblique");
-                    default -> { }
-                }
-            }
-            if (family == null || source == null) {
-                continue;
-            }
-            byte[] program = FontFaceSource.read(source, baseDirectory);
+        for (FontFaceRules rule : FontFaceRules.of(stylesheet)) {
+            byte[] program = FontFaceSource.read(rule.source(), baseDirectory);
             if (program != null) {
-                faces.declare(family, bold, italic, program);
+                faces.declare(rule.family(), rule.bold(), rule.italic(), program);
             }
-        }
-    }
-
-    /** Whether an {@code @font-face} weight descriptor names a bold variant. */
-    private static boolean isBold(String value) {
-        if (value.startsWith("bold")) {
-            return true;
-        }
-        try {
-            // A range such as `400 700` is bold if it reaches that far.
-            String last = value.split("\\s+")[value.split("\\s+").length - 1];
-            return Integer.parseInt(last) >= 600;
-        } catch (NumberFormatException e) {
-            return false;
         }
     }
 
@@ -790,18 +756,47 @@ public final class Layout {
             // than moving the line, and the last line of a block keeps the ragged
             // edge it fell with — a stretched final line is the classic tell of a
             // renderer that justified one line too many.
-            float slack = align == TextAlign.JUSTIFY && broken.size() > 1
-                    ? Math.max(0f, lineWidth - visual.width())
-                    : 0f;
-            int gaps = visual.fragments().size() - 1;
-            for (int i = 0; i < visual.fragments().size(); i++) {
-                float spread = gaps > 0 ? slack * i / gaps : 0f;
-                emitFragment(visual.fragments().get(i), lineLeft + offset + spread, baseline);
+            List<LineBreaker.Fragment> fragments = visual.fragments();
+            List<Integer> gaps = align == TextAlign.JUSTIFY && broken.size() > 1
+                    ? wordGaps(fragments)
+                    : List.of();
+            // The trailing space of the last word on the line is not drawn, so a
+            // justified line that counted it would stop a space short of the
+            // margin instead of squaring off against it.
+            float drawn = visual.width() - breaker.trailingSpace(fragments.get(fragments.size() - 1));
+            float slack = gaps.isEmpty() ? 0f : Math.max(0f, lineWidth - drawn);
+
+            int widened = 0;
+            for (int i = 0; i < fragments.size(); i++) {
+                if (gaps.contains(i)) {
+                    widened++;
+                }
+                float spread = gaps.isEmpty() ? 0f : slack * widened / gaps.size();
+                emitFragment(fragments.get(i), lineLeft + offset + spread, baseline);
             }
             y += visual.height();
             lineIndent = 0f;
             remaining = broken.size() == 1 ? List.of() : rest(broken);
         }
+    }
+
+    /**
+     * The indices of the fragments that begin a word, so justification widens
+     * the gaps between words and nothing else.
+     *
+     * <p>A fragment boundary is not always a word boundary: {@code un<b>break</b>able}
+     * is three fragments of one word, and stretching between them would draw
+     * "un break able".
+     */
+    private static List<Integer> wordGaps(List<LineBreaker.Fragment> fragments) {
+        List<Integer> gaps = new ArrayList<>();
+        for (int i = 1; i < fragments.size(); i++) {
+            if (fragments.get(i - 1) instanceof LineBreaker.TextFragment text
+                    && text.text().endsWith(" ")) {
+                gaps.add(i);
+            }
+        }
+        return gaps;
     }
 
     /**

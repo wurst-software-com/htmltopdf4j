@@ -56,7 +56,7 @@ byte-identical output. Anything outside that is None here and stays None.
 | `@media screen` | Full | Correctly does *not* apply |
 | `@page` size, orientation and margins | Full | |
 | `@page` margin boxes (`@top-center` and friends) | Full | Painted after pagination, because `counter(pages)` needs the final Page count |
-| `@font-face` with `local()`, `url()` and `data:` | Full | `local()` matches a face's full or PostScript name, not only its family. `http(s)` sources are refused, not fetched |
+| `@font-face` with `local()`, `url()` and `data:` | Full | `local()` matches a face's full or PostScript name, not only its family. An alternative hinted `format(woff2)`, `format(svg)` or `format(embedded-opentype)` is skipped without being read. `http(s)` sources are refused, not fetched |
 | `@font-face` `font-weight` and `font-style` descriptors | Full | A second rule for one family supplies its bold or italic variant rather than replacing it |
 | `@font-face` source formats | Partial | Bare SFNT (`.ttf`, `.otf`) and WOFF1, which is unwrapped to SFNT. WOFF2 needs Brotli, which the JDK does not carry, so it is refused and the `src` chain moves on |
 | `@import` | None | Would be a network or file fetch mid-parse |
@@ -102,7 +102,7 @@ byte-identical output. Anything outside that is None here and stays None.
 | Faux bold | Full | Fill plus a thin stroke, when the family has no real bold Face |
 | Faux italic | None | An italic-less family is drawn upright |
 | `line-height` (`normal`, unitless, lengths, percentages) | Full | A unitless value inherits as a multiplier |
-| `text-align: left`, `right`, `center`, `justify` | Full | Justification widens the gaps between the pieces of a line; the last line of a block keeps the ragged edge it fell with |
+| `text-align: left`, `right`, `center`, `justify` | Full | Justification widens the gaps between words — not the gaps inside a word split across styles — and squares the line off against the right margin; the last line of a block keeps the ragged edge it fell with |
 | `text-decoration: underline`, `line-through`, `none` | Full | |
 | `text-decoration: overline` | None | |
 | `text-transform`, `text-indent`, `letter-spacing`, `word-spacing` | Full | |
@@ -125,13 +125,14 @@ byte-identical output. Anything outside that is None here and stays None.
 | `position: sticky` | None | |
 | `z-index` | Full | Positioned boxes are painted in a post-pass sorted by z-index |
 | Flexbox: `flex-direction`, `flex-wrap`, `flex`, `flex-grow/shrink/basis`, `justify-content`, `order`, `gap` | Full | Inline children of a flex container are blockified |
-| Flexbox: `align-items`, `align-content`, `align-self` | None | Items are stretched to the line. On a **grid** container both `align-items` and `align-self` are honoured |
+| Flexbox: `align-items`, `align-content`, `align-self` | None | Items are stretched to the line whatever the value says |
 | Grid: `grid-template-columns` (lengths, `fr`, `repeat()`), `grid-template-areas`, `grid-column`, `grid-row`, `grid-area`, `gap` | Full | Definite tracks first, then `fr` shares the remainder; row-major placement |
-| Grid: `grid-template-rows` (lengths, `fr`, `auto`), `align-items`, `align-self` | Full | An `fr` row shares the container's declared `height`; with no declared height it is content-sized, because a fraction needs something to be a fraction of |
+| Grid: `grid-template-rows` (lengths, `fr`, `auto`) | Full | An `fr` row shares the container's declared `height`; with no declared height it is content-sized, because a fraction needs something to be a fraction of |
+| Grid: `align-items`, `align-self` | Partial | `center`/`middle` and `end`/`flex-end`/`self-end` place the item in its row; `stretch`, the initial value, leaves it content-sized rather than growing it to the track |
 | Grid: `grid-auto-flow`, `grid-auto-rows`, `minmax()` | None | Rows not named by a track are sized to their content |
 | Tables: automatic column widths, `colspan`, `rowspan`, header and footer groups | Full | A rowspan occupancy grid keeps the rows below a spanning cell aligned |
 | Tables: per-side cell borders | Full | A cell declaring only `border-bottom` gets one line under it, through the same per-side stroking blocks use |
-| Tables: `vertical-align` on a cell | Full | `middle` and `bottom` place the content in the row; `top` and `baseline` leave it at the top |
+| Tables: `vertical-align` on a cell | Partial | `middle` and `bottom` place the content in the row; `top` is honoured and `baseline`, the initial value, is treated as `top` rather than aligning the cells' first baselines |
 | Tables: `border-collapse`, `table-layout: fixed` | None | Borders are always separate |
 | Multi-column (`column-count`, `column-width`) | None | |
 

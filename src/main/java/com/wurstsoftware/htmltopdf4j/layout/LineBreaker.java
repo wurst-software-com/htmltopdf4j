@@ -319,6 +319,20 @@ public final class LineBreaker {
         return pieces;
     }
 
+    /**
+     * The width of the space a fragment carries at its end.
+     *
+     * <p>A word keeps the space that followed it, so the last fragment of a
+     * wrapped line ends in one. It is not drawn, and a justified line that
+     * counted it would stop a space short of the right margin.
+     */
+    float trailingSpace(Fragment fragment) {
+        if (!(fragment instanceof TextFragment text) || !text.text().endsWith(" ")) {
+            return 0f;
+        }
+        return advance(chains.apply(text.face()), " ", text.size(), letterSpacing(text.run().style()));
+    }
+
     /** The width a run of inline content would take if it were never wrapped. */
     public float unwrappedWidth(List<InlineRun> runs) {
         float width = 0f;

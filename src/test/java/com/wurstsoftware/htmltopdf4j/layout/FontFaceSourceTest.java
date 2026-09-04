@@ -18,6 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 class FontFaceSourceTest {
 
     private static final byte[] PROGRAM = {0x00, 0x01, 0x00, 0x00, 0x11, 0x22};
+    private static final byte[] OTHER_PROGRAM = {0x00, 0x01, 0x00, 0x00, 0x33, 0x44};
 
     @TempDir
     Path directory;
@@ -162,6 +163,27 @@ class FontFaceSourceTest {
         assertArrayEquals(
                 PROGRAM,
                 FontFaceSource.read("url(brand.woff2) format('woff2'), url(brand.ttf)", directory));
+    }
+
+    @Test
+    void anAlternativeHintedAsAnUnsupportedFormatIsNotEvenRead() {
+        // The chain falls through in order and skips what it cannot open: the
+        // first alternative is a perfectly good SFNT, but its hint says woff2,
+        // so the bytes are never fetched and the next alternative wins.
+        write("hinted.bin", PROGRAM);
+        write("brand.ttf", OTHER_PROGRAM);
+
+        assertArrayEquals(
+                OTHER_PROGRAM,
+                FontFaceSource.read("url(hinted.bin) format('woff2'), url(brand.ttf)", directory));
+    }
+
+    @Test
+    void aTruetypeHintDoesNotStopTheAlternativeBeingRead() {
+        write("brand.ttf", PROGRAM);
+
+        assertArrayEquals(
+                PROGRAM, FontFaceSource.read("url(brand.ttf) format('truetype')", directory));
     }
 
     private static byte[] systemFont() {

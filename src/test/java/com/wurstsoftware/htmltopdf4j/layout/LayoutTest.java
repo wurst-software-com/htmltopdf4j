@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.wurstsoftware.htmltopdf4j.RenderOptions;
 import com.wurstsoftware.htmltopdf4j.paint.PaintCommand;
 import com.wurstsoftware.htmltopdf4j.paint.Rect;
+import com.wurstsoftware.htmltopdf4j.text.Standard14Face;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -153,6 +154,37 @@ class LayoutTest {
 
         for (Laid.Line line : justified.lines()) {
             assertEquals(48f, line.x(), TOLERANCE, "justifying spreads the gaps, it does not indent");
+        }
+    }
+
+    @Test
+    void justificationWidensWordGapsAndNotWordsThemselves() {
+        // A word split across two styles is still one word: `un<b>break</b>able`
+        // is three fragments with no space between them, and stretching there
+        // would print "un break able".
+        String prose = "alpha un<b>break</b>able beta gamma delta epsilon zeta eta theta"
+                + " iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon.";
+        Laid justified = Laid.of("<p style='width:200pt; text-align:justify'>" + prose + "</p>");
+        Laid ragged = Laid.of("<p style='width:200pt'>" + prose + "</p>");
+
+        assertEquals(
+                ragged.text("break").x() - ragged.text("un").x(),
+                justified.text("break").x() - justified.text("un").x(),
+                TOLERANCE,
+                "the pieces of one word must stay touching");
+    }
+
+    @Test
+    void aJustifiedLineReachesTheRightEdge() {
+        Laid laid = Laid.of("<p style='width:200pt; text-align:justify'>" + PROSE + "</p>");
+
+        List<Laid.Line> lines = laid.lines();
+        assertTrue(lines.size() > 2, "the prose should wrap");
+        for (int i = 0; i < lines.size() - 1; i++) {
+            PaintCommand.Text last = lines.get(i).runs.get(lines.get(i).runs.size() - 1);
+            float right = last.x()
+                    + Standard14Face.HELVETICA.measure(last.text().stripTrailing(), last.fontSize());
+            assertEquals(48f + 200f, right, 1f, "line " + i + " should end flush with the right edge");
         }
     }
 
