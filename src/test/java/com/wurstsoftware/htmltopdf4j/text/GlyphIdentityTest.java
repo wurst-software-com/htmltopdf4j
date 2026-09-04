@@ -36,7 +36,7 @@ class GlyphIdentityTest {
     @MethodSource("systemFaces")
     void awtGlyphCodesAreTheEmbeddedFacesGlyphIds(Path path) throws IOException {
         byte[] bytes = Files.readAllBytes(path);
-        Face face = Face.fromBytes(bytes, path.getFileName().toString());
+        EmbeddedFace face = EmbeddedFace.fromBytes(bytes, path.getFileName().toString());
 
         try (TrueTypeFont reference = new TTFParser().parse(new RandomAccessReadBuffer(bytes))) {
             CmapLookup cmap = reference.getUnicodeCmapLookup();
@@ -63,7 +63,7 @@ class GlyphIdentityTest {
     @MethodSource("systemFaces")
     void unkernedAdvancesMatchTheFacesHorizontalMetrics(Path path) throws IOException {
         byte[] bytes = Files.readAllBytes(path);
-        Face face = Face.fromBytes(bytes, path.getFileName().toString());
+        EmbeddedFace face = EmbeddedFace.fromBytes(bytes, path.getFileName().toString());
 
         try (TrueTypeFont reference = new TTFParser().parse(new RandomAccessReadBuffer(bytes))) {
             var hmtx = reference.getHorizontalMetrics();
@@ -86,7 +86,7 @@ class GlyphIdentityTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("systemFaces")
     void shapedGlyphsCoverEveryInputCharacter(Path path) throws IOException {
-        Face face = Face.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
+        EmbeddedFace face = EmbeddedFace.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
 
         String text = "affluent office";
         ShapedRun run = face.shape(text, 12f, Direction.LTR, ShapingFeatures.SHAPED);
@@ -119,7 +119,7 @@ class GlyphIdentityTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("systemFaces")
     void shapingNeverLosesCharacters(Path path) throws IOException {
-        Face face = Face.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
+        EmbeddedFace face = EmbeddedFace.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
         String text = "ffl fi office";
 
         ShapedRun unshaped = face.shape(text, 1000f, Direction.LTR, ShapingFeatures.NONE);
@@ -142,7 +142,7 @@ class GlyphIdentityTest {
     void atLeastOneSystemFaceFormsLigatures() throws IOException {
         boolean anyLigated = false;
         for (Path path : TestFonts.available()) {
-            Face face = Face.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
+            EmbeddedFace face = EmbeddedFace.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
             ShapedRun shaped = face.shape("ffl", 1000f, Direction.LTR, ShapingFeatures.SHAPED);
             if (shaped.glyphs().size() == 1) {
                 anyLigated = true;
@@ -162,7 +162,7 @@ class GlyphIdentityTest {
     void atLeastOneSystemFaceKerns() throws IOException {
         boolean anyKerned = false;
         for (Path path : TestFonts.available()) {
-            Face face = Face.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
+            EmbeddedFace face = EmbeddedFace.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
             for (String pair : new String[] {"AV", "To"}) {
                 float unkerned = face.measure(pair, 1000f, Direction.LTR, ShapingFeatures.NONE);
                 float kerned = face.measure(pair, 1000f, Direction.LTR, ShapingFeatures.SHAPED);
@@ -177,7 +177,7 @@ class GlyphIdentityTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("systemFaces")
     void rightToLeftTextIsReorderedVisually(Path path) throws IOException {
-        Face face = Face.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
+        EmbeddedFace face = EmbeddedFace.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
         String hebrew = "שלום";
         Assumptions.assumeTrue(face.canDisplayAll(hebrew), "face must cover Hebrew");
 

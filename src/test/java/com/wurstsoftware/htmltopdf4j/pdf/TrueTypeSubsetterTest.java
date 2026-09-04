@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.wurstsoftware.htmltopdf4j.text.Direction;
-import com.wurstsoftware.htmltopdf4j.text.Face;
+import com.wurstsoftware.htmltopdf4j.text.EmbeddedFace;
 import com.wurstsoftware.htmltopdf4j.text.Glyph;
 import com.wurstsoftware.htmltopdf4j.text.ShapedRun;
 import com.wurstsoftware.htmltopdf4j.text.ShapingFeatures;
@@ -40,7 +40,7 @@ class TrueTypeSubsetterTest {
     @MethodSource("systemFaces")
     void subsetKeepsGlyphIdsAndDropsUnusedOutlines(Path path) throws IOException {
         byte[] original = Files.readAllBytes(path);
-        Face face = Face.fromBytes(original, path.getFileName().toString());
+        EmbeddedFace face = EmbeddedFace.fromBytes(original, path.getFileName().toString());
         SortedSet<Integer> used = glyphsOf(face, "Hi");
 
         byte[] subset = TrueTypeSubsetter.subset(original, used);
@@ -79,7 +79,7 @@ class TrueTypeSubsetterTest {
     @MethodSource("systemFaces")
     void subsetPreservesMetricsForEveryGlyph(Path path) throws IOException {
         byte[] original = Files.readAllBytes(path);
-        Face face = Face.fromBytes(original, path.getFileName().toString());
+        EmbeddedFace face = EmbeddedFace.fromBytes(original, path.getFileName().toString());
         byte[] subset = TrueTypeSubsetter.subset(original, glyphsOf(face, "The quick brown fox"));
 
         try (TrueTypeFont before = parse(original);
@@ -98,11 +98,11 @@ class TrueTypeSubsetterTest {
     @MethodSource("systemFaces")
     void subsetShapesTheKeptTextIdentically(Path path) throws IOException {
         byte[] original = Files.readAllBytes(path);
-        Face face = Face.fromBytes(original, path.getFileName().toString());
+        EmbeddedFace face = EmbeddedFace.fromBytes(original, path.getFileName().toString());
         String text = "Hamburgefonstiv";
 
         byte[] subset = TrueTypeSubsetter.subset(original, glyphsOf(face, text));
-        Face subsetFace = Face.fromBytes(subset, "subset");
+        EmbeddedFace subsetFace = EmbeddedFace.fromBytes(subset, "subset");
 
         ShapedRun expected = face.shape(text, 12f, Direction.LTR, ShapingFeatures.SHAPED);
         ShapedRun actual = subsetFace.shape(text, 12f, Direction.LTR, ShapingFeatures.SHAPED);
@@ -120,7 +120,7 @@ class TrueTypeSubsetterTest {
                 TrueTypeSubsetter.subset(original, used), TrueTypeSubsetter.subset(original, used));
     }
 
-    private static SortedSet<Integer> glyphsOf(Face face, String text) {
+    private static SortedSet<Integer> glyphsOf(EmbeddedFace face, String text) {
         SortedSet<Integer> gids = new TreeSet<>();
         for (Glyph glyph : face.shape(text, 12f, Direction.LTR, ShapingFeatures.SHAPED).glyphs()) {
             gids.add(glyph.glyphId());

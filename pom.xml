@@ -40,6 +40,14 @@
       <version>5.11.3</version>
       <scope>test</scope>
     </dependency>
+    <!-- Test-only oracle: the output is parsed by an independent PDF reader
+         rather than string-matched, so a structurally broken file fails loudly. -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>3.0.3</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
