@@ -4,7 +4,7 @@ What this engine renders, per HTML element and CSS feature: **Full**, **Partial*
 or **None**. "Partial" always says what is missing.
 
 This is the honest state of the port, not a roadmap. It is written against the
-code, and the Parity harness — 47 Fixtures, one JUnit case each — is what keeps
+code, and the Parity harness — 48 Fixtures, one JUnit case each — is what keeps
 it from drifting. Where a row says Full, there is a Fixture or a unit test that
 would fail if it stopped being true.
 
@@ -115,6 +115,8 @@ byte-identical output. Anything outside that is None here and stays None.
 | Vertical writing modes | None | |
 | Hyphenation | None | |
 
+| `<link rel=stylesheet>` and `@import` | Partial | Loaded from under `RenderOptions.baseDirectory`, in document order with the `<style>` blocks, with `@import` followed eight deep and cycles cut. Nothing is fetched: a target outside the base directory, an `http(s)` one, or any target at all when no base directory was given, is skipped and the Document is styled by what it carries |
+
 ## Layout modes
 
 | Feature | Support | Notes |
@@ -182,7 +184,7 @@ byte-identical output. Anything outside that is None here and stays None.
 ## Environment dependence
 
 The known-failures ledger (`src/test/resources/parity-known-failures.txt`) is
-**empty**: all 47 Fixtures meet their Expectations. The mechanism stays, because
+**empty**: all 48 Fixtures meet their Expectations. The mechanism stays, because
 it can only shrink — a listed Fixture that starts passing fails the build — but
 it currently lists nothing.
 

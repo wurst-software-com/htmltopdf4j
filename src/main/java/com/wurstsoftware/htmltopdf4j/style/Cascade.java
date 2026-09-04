@@ -10,6 +10,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.nio.file.Path;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Selector;
@@ -319,20 +320,41 @@ public final class Cascade {
 
     /** Every {@code <style>} block in the Document, in source order. */
     public static Stylesheet authorStylesheet(Document document) {
+        return authorStylesheet(document, null);
+    }
+
+    /**
+     * @param baseDirectory the directory a {@code <link rel=stylesheet>} is
+     *     resolved against, or {@code null} to read no sheet from disk at all.
+     *     Nothing outside it, and nothing remote, is read either way.
+     */
+    public static Stylesheet authorStylesheet(Document document, Path baseDirectory) {
         StringBuilder css = new StringBuilder();
-        for (Element style : document.select("style")) {
-            String media = style.attr("media");
+        // Linked sheets and blocks are collected in one pass, in document order,
+        // because that order is what decides between two rules of equal
+        // specificity.
+        for (Element element : document.select("style, link")) {
+            String media = element.attr("media");
             if (!media.isBlank() && !appliesToPrint(media)) {
                 continue;
             }
-            css.append(style.data()).append('\n');
+            if (element.normalName().equals("style")) {
+                css.append(element.data()).append('\n');
+            } else if (isStylesheetLink(element)) {
+                css.append(ExternalStyles.load(element.attr("href"), baseDirectory)).append('\n');
+            }
         }
         // Numbering starts past the user-agent rules so an author rule of equal
         // specificity always sorts later than a UA one.
         return css.isEmpty() ? Stylesheet.EMPTY : Stylesheet.parse(css.toString(), 1_000_000);
     }
 
-    private static boolean appliesToPrint(String media) {
+    private static boolean isStylesheetLink(Element link) {
+        return java.util.Arrays.stream(link.attr("rel").trim().split("\\s+"))
+                .anyMatch(token -> token.equalsIgnoreCase("stylesheet"));
+    }
+
+    static boolean appliesToPrint(String media) {
         String value = media.toLowerCase(java.util.Locale.ROOT);
         return value.contains("print") || value.contains("all");
     }

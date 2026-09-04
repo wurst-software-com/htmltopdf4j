@@ -1,0 +1,17 @@
+{
+  "fixture": "external-css",
+  "layer": "features",
+  "description": "A <link rel=stylesheet> under the base directory is loaded, the @import inside it is followed, and the later <style> block wins at equal specificity. The https link is not fetched and the screen-only link is skipped. Authored here rather than ported: the reference engine loads no external stylesheet at all.",
+  "pdf_assertions": {
+    "must_contain_operators": ["BT", "ET", "re", "f"],
+    "must_contain_text": ["Linkedheading", "Cardtext", "Notetext"],
+    "min_size_bytes": 700,
+    "max_size_bytes": 2000000,
+    "min_pages": 1
+  },
+  "visual_assertions": [
+    "The heading is dark blue with a rule under it, from the linked sheet.",
+    "The card has a pale blue background from the imported palette and a thin blue border from the linked sheet.",
+    "The render does not stall or fail on the https link, which is never fetched."
+  ]
+}

@@ -7,7 +7,10 @@ It is a hand-written translation of the Rust [`htmltopdf`](https://github.com/Sa
 engine by Sanzar Rahman into idiomatic Java 21, used under the MIT licence, and
 it is a *library*: there is no CLI, no HTTP server and no scripting
 stage. Rendering is deliberately offline — a Document that names an `http(s)`
-image or font makes no network request.
+image, font or stylesheet makes no network request. A `<link rel=stylesheet>`
+or an `@import` naming a file under `RenderOptions.baseDirectory` *is* read
+from disk; anything above that directory, and everything when no base directory
+was given, is skipped rather than fetched.
 
 ## Using it
 
@@ -98,12 +101,12 @@ Expectation files.
 ## Building
 
 ```
-mvn test        # 564 tests, including 47 Fixtures against their Expectations
+mvn test        # 574 tests, including 48 Fixtures against their Expectations
 ```
 
 Java 21 is required to build and to run.
 
-All 47 Fixtures pass — 41 ported from the reference corpus, plus six this
+All 48 Fixtures pass — 41 ported from the reference corpus, plus seven this
 port authored itself, each of which says in its Expectation why it had no
 reference Expectation to port.
 

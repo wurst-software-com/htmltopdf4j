@@ -44,7 +44,7 @@ public final class Engine {
             throw new IllegalArgumentException("html");
         }
         Document document = Jsoup.parse(html);
-        Stylesheet stylesheet = Cascade.authorStylesheet(document);
+        Stylesheet stylesheet = Cascade.authorStylesheet(document, options.baseDirectory().orElse(null));
         Cascade cascade = Cascade.apply(document, stylesheet);
         BoxTree tree = BoxTreeBuilder.build(document, cascade);
         if (!tree.hasContent()) {

@@ -1,0 +1,5 @@
+@import url("external-palette.css");
+
+body { font-size: 12pt; }
+h1 { color: #234; border-bottom: 1pt solid #9ab; padding-bottom: 4pt; }
+.card { border: 0.5pt solid #b9d3e8; padding: 8pt; }

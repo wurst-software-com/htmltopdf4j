@@ -63,6 +63,7 @@ public record Fixture(String layer, String name) {
             new Fixture("features", "flex-align"),
             new Fixture("features", "grid-stretch"),
             new Fixture("features", "cell-baseline"),
+            new Fixture("features", "external-css"),
             new Fixture("combined", "invoice"),
             new Fixture("edge-cases", "unicode"),
             new Fixture("edge-cases", "long-table"),
