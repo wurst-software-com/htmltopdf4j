@@ -1,5 +1,6 @@
 package com.wurstsoftware.htmltopdf4j;
 
+import com.wurstsoftware.htmltopdf4j.text.FontEnvironment;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
@@ -25,6 +26,7 @@ public final class RenderOptions {
     private final float marginLeft;
     private final FaceSource defaultFace;
     private final Path baseDirectory;
+    private final FontEnvironment fontEnvironment;
 
     private RenderOptions(Builder builder) {
         this.paper = builder.paper;
@@ -35,6 +37,7 @@ public final class RenderOptions {
         this.marginLeft = builder.marginLeft;
         this.defaultFace = builder.defaultFace;
         this.baseDirectory = builder.baseDirectory;
+        this.fontEnvironment = builder.fontEnvironment;
     }
 
     /** A4 portrait, 48pt margins, Helvetica, and no base directory for local images. */
@@ -53,7 +56,8 @@ public final class RenderOptions {
                 .pageSize(pageSize)
                 .margins(marginTop, marginRight, marginBottom, marginLeft)
                 .defaultFace(defaultFace)
-                .baseDirectory(baseDirectory);
+                .baseDirectory(baseDirectory)
+                .fontEnvironment(fontEnvironment);
     }
 
     public Paper paper() {
@@ -93,6 +97,16 @@ public final class RenderOptions {
         return Optional.ofNullable(baseDirectory);
     }
 
+    /**
+     * The fonts this render may draw with. Defaults to the shared environment,
+     * which scans the machine's own font directories once for the life of the
+     * process; give it another to render against a different search path, or
+     * {@link FontEnvironment#empty()} to render against none.
+     */
+    public FontEnvironment fontEnvironment() {
+        return fontEnvironment;
+    }
+
     /** The width available to content after the left and right margins. */
     public float contentWidth() {
         return pageSize.width() - marginLeft - marginRight;
@@ -113,6 +127,7 @@ public final class RenderOptions {
         private float marginLeft = DEFAULT_MARGIN;
         private FaceSource defaultFace = FaceSource.HELVETICA;
         private Path baseDirectory;
+        private FontEnvironment fontEnvironment = FontEnvironment.shared();
 
         private Builder() {}
 
@@ -168,6 +183,11 @@ public final class RenderOptions {
         }
 
         /** {@code null} disables resolving {@code <img src>} against the file system. */
+        public Builder fontEnvironment(FontEnvironment fontEnvironment) {
+            this.fontEnvironment = Objects.requireNonNull(fontEnvironment, "fontEnvironment");
+            return this;
+        }
+
         public Builder baseDirectory(Path baseDirectory) {
             this.baseDirectory = baseDirectory;
             return this;

@@ -58,8 +58,14 @@ condition every caller should have to handle.
   returns a fresh builder when you want a variant.
 - **`RenderOptions.Builder` is not.** Build it on one thread, then share the
   built value.
-- **The installed-font scan is process-wide and happens once**, behind a
-  double-checked lock. A machine's fonts do not change while a render runs.
+- **A `FontEnvironment` is safe to share.** It scans its directories once, on
+  first use, and caches every Face it parses; a machine's fonts do not change
+  while a render runs. `RenderOptions` defaults to `FontEnvironment.shared()`,
+  so callers who do not care pay for one scan between them. A caller who wants a
+  different search path builds its own with `FontEnvironment.of(directories)` —
+  or `FontEnvironment.empty()` for none at all — and hands it to
+  `RenderOptions.Builder.fontEnvironment`. Nothing about fonts is process-wide
+  state: one environment cannot disturb another.
 
 The same HTML and options render to the same bytes every time, on any thread.
 
@@ -101,7 +107,7 @@ Expectation files.
 ## Building
 
 ```
-mvn test        # 574 tests, including 48 Fixtures against their Expectations
+mvn test        # 581 tests, including 48 Fixtures against their Expectations
 ```
 
 Java 21 is required to build and to run.

@@ -5,11 +5,11 @@ they be ported where they assert behaviour the render seam cannot reach, and
 dropped where they assert internal structure this design does not reproduce.
 This is that accounting: every one is in exactly one row below.
 
-The Java suite is **574 tests**, of which 48 are the Fixtures — 41 ported from
+The Java suite is **581 tests**, of which 48 are the Fixtures — 41 ported from
 the reference corpus plus seven this port authored itself, each of which says in
 its Expectation why it had no reference Expectation to port. It is larger than
 the reference's because a hand translation needs its own tests at the seams the
-translation introduced — `Woff`, `FontLibrary`, `FaceRegistry`, `Laid` — not
+translation introduced — `Woff`, `FontEnvironment`, `FaceRegistry`, `Laid` — not
 because the reference was under-tested.
 
 | Reference module | Tests | Ported | Dropped |
@@ -46,7 +46,7 @@ they may land in one Java test or several.
 - **`font.rs` (21)** — face discovery and variant selection, shaping, cluster
   reconstruction, kerning in measurement, the Fallback chain, WinAnsi encoding,
   WOFF1 unwrapping, and `@font-face` shadowing an installed family. These live
-  in `FontLibraryTest`, `FaceChainTest`, `FaceRegistryTest`, `WoffTest`,
+  in `FontEnvironmentTest`, `FaceChainTest`, `FaceRegistryTest`, `WoffTest`,
   `GlyphIdentityTest` and `FontFaceSourceTest`.
 - **`image.rs` (12)** — PNG and JPEG decoding, the soft mask, `data:` URIs,
   sizing from CSS and HTML attributes, inline versus block images, and the

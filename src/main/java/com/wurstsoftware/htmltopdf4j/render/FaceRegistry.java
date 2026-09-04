@@ -5,7 +5,7 @@ import com.wurstsoftware.htmltopdf4j.style.ComputedStyle;
 import com.wurstsoftware.htmltopdf4j.text.EmbeddedFace;
 import com.wurstsoftware.htmltopdf4j.text.Face;
 import com.wurstsoftware.htmltopdf4j.text.FaceChain;
-import com.wurstsoftware.htmltopdf4j.text.FontLibrary;
+import com.wurstsoftware.htmltopdf4j.text.FontEnvironment;
 import com.wurstsoftware.htmltopdf4j.text.Standard14Face;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -24,9 +24,9 @@ import java.util.Optional;
  *
  * <p>This is per-render state, not a cache shared between renders: a Face chain
  * index is only meaningful against the {@link RenderContext} it was built for.
- * Font *files* are cached across renders by {@link #FILE_CACHE}, because parsing
- * the same font again for every render is pure waste and the bytes on disk do
- * not change under us.
+ * Font *files* are cached by the {@link FontEnvironment} this registry draws
+ * from, because parsing the same font again for every render is pure waste and
+ * the bytes on disk do not change under us.
  */
 public final class FaceRegistry {
 
@@ -41,9 +41,6 @@ public final class FaceRegistry {
         }
     }
 
-    /** Faces loaded from disk, shared between renders and keyed by absolute path. */
-    private static final Map<Path, EmbeddedFace> FILE_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
-
     /** Families tried, in order, for a character the requested Face cannot display. */
     private static final List<String> FALLBACK_FAMILIES =
             List.of("dejavu sans", "noto sans", "freeserif", "noto sans symbols", "symbola", "noto color emoji");
@@ -53,8 +50,10 @@ public final class FaceRegistry {
     private final Map<String, Integer> byRequest = new HashMap<>();
     private final Map<Variant, EmbeddedFace> declaredFaces = new LinkedHashMap<>();
     private final Face defaultFace;
+    private final FontEnvironment fonts;
 
-    public FaceRegistry(FaceSource defaultSource) {
+    public FaceRegistry(FaceSource defaultSource, FontEnvironment fonts) {
+        this.fonts = fonts;
         this.defaultFace = load(defaultSource);
         chains.add(chainFor(defaultFace));
         syntheticBold.add(false);
@@ -159,7 +158,7 @@ public final class FaceRegistry {
             if (declared != null) {
                 return declared;
             }
-            Optional<Face> installed = FontLibrary.find(family, bold, italic).flatMap(FaceRegistry::open);
+            Optional<Face> installed = fonts.find(family, bold, italic).flatMap(fonts::open);
             if (installed.isPresent()) {
                 return installed.get();
             }
@@ -175,35 +174,21 @@ public final class FaceRegistry {
     private FaceChain chainFor(Face primary) {
         List<Face> fallbacks = new ArrayList<>();
         for (String family : FALLBACK_FAMILIES) {
-            FontLibrary.find(family, false, false)
-                    .flatMap(FaceRegistry::open)
+            fonts.find(family, false, false)
+                    .flatMap(fonts::open)
                     .filter(face -> !face.family().equalsIgnoreCase(primary.family()))
                     .ifPresent(fallbacks::add);
         }
         return new FaceChain(primary, fallbacks);
     }
 
-    private static Optional<Face> open(FontLibrary.Entry entry) {
-        EmbeddedFace cached = FILE_CACHE.get(entry.path());
-        if (cached != null) {
-            return Optional.of(cached);
-        }
-        try {
-            EmbeddedFace face = EmbeddedFace.fromBytes(Files.readAllBytes(entry.path()), entry.family());
-            FILE_CACHE.put(entry.path(), face);
-            return Optional.of(face);
-        } catch (IOException | RuntimeException e) {
-            return Optional.empty();
-        }
-    }
-
-    private static Face load(FaceSource source) {
+    private Face load(FaceSource source) {
         return switch (source) {
             case FaceSource.Standard14 ignored -> Standard14Face.HELVETICA;
             case FaceSource.Bytes bytes -> EmbeddedFace.fromBytes(bytes.data(), bytes.name());
             case FaceSource.File file -> loadFile(file.path());
-            case FaceSource.SystemFamily family -> FontLibrary.find(family.family(), false, false)
-                    .flatMap(FaceRegistry::open)
+            case FaceSource.SystemFamily family -> fonts.find(family.family(), false, false)
+                    .flatMap(fonts::open)
                     .orElse(Standard14Face.HELVETICA);
         };
     }

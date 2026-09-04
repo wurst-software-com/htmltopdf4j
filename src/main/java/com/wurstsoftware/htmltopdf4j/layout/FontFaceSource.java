@@ -1,6 +1,6 @@
 package com.wurstsoftware.htmltopdf4j.layout;
 
-import com.wurstsoftware.htmltopdf4j.text.FontLibrary;
+import com.wurstsoftware.htmltopdf4j.text.FontEnvironment;
 import com.wurstsoftware.htmltopdf4j.text.Woff;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -44,7 +44,7 @@ final class FontFaceSource {
     }
 
     /** The font program, or {@code null} when none of the alternatives can be read. */
-    static byte[] read(String source, Path baseDirectory) {
+    static byte[] read(String source, Path baseDirectory, FontEnvironment fonts) {
         for (Alternative alternative : split(source)) {
             if (!alternative.isReadable()) {
                 continue;
@@ -52,7 +52,7 @@ final class FontFaceSource {
             // A hint is only a hint, so an alternative that survives it still has
             // its container decided by the bytes: WOFF1 is unwrapped, a bare SFNT
             // passes through, and anything else counts as unreadable.
-            byte[] program = Woff.decode(readOne(alternative.function(), baseDirectory));
+            byte[] program = Woff.decode(readOne(alternative.function(), baseDirectory, fonts));
             if (program != null) {
                 return program;
             }
@@ -60,12 +60,12 @@ final class FontFaceSource {
         return null;
     }
 
-    private static byte[] readOne(String alternative, Path baseDirectory) {
+    private static byte[] readOne(String alternative, Path baseDirectory, FontEnvironment fonts) {
         String lower = alternative.toLowerCase(Locale.ROOT);
         if (lower.startsWith("local(")) {
             // `local()` names a face, not a family: `local("Arial Bold")` is a
             // full name, which the family index has no key for.
-            return FontLibrary.local(unquote(argumentOf(alternative)))
+            return fonts.local(unquote(argumentOf(alternative)))
                     .map(entry -> readFile(entry.path()))
                     .orElse(null);
         }

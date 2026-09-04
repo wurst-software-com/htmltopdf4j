@@ -30,12 +30,14 @@ mvn test -DargLine="-Djava.awt.headless=true -Duser.home=/tmp/nofonts"
 ```
 
 which needs the `argLine` in `pom.xml` overridden, since a configured one wins
-over the property.
+over the property. Since #27 a single render can be checked the same way without
+touching the JVM's view of the machine, by giving it
+`FontEnvironment.empty()`.
 
 Resolving a family against a font the *host* has installed — `font-family:
 Georgia` with no `@font-face` — is no longer covered by a Fixture. It is covered
-by the unit tests around `FontLibrary` and `FaceRegistry`, which skip when the
-host has nothing to find, and by the fallback chain every Fixture exercises
+by the unit tests around `FontEnvironment` and `FaceRegistry`, which skip when
+the host has nothing to find, and by the fallback chain every Fixture exercises
 anyway. The `local()` form of an `@font-face` `src` moved the same way: it names
 a face installed on the host by definition, so it cannot be asserted by a
 Fixture that must not depend on one.

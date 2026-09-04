@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.wurstsoftware.htmltopdf4j.text.FontEnvironment;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -102,9 +104,11 @@ class EngineTest {
 
     @Test
     void anOptionsValueRoundTripsThroughItsBuilder() {
+        FontEnvironment fonts = FontEnvironment.empty();
         RenderOptions options = RenderOptions.builder()
                 .paper(Paper.LETTER)
                 .margins(10f, 20f, 30f, 40f)
+                .fontEnvironment(fonts)
                 .build();
         RenderOptions copy = options.toBuilder().build();
 
@@ -114,6 +118,7 @@ class EngineTest {
         assertEquals(options.marginBottom(), copy.marginBottom());
         assertEquals(options.marginLeft(), copy.marginLeft());
         assertEquals(options.pageSize(), copy.pageSize());
+        assertEquals(fonts, copy.fontEnvironment());
     }
 
     @Test
@@ -130,8 +135,8 @@ class EngineTest {
 
     @Test
     void aDocumentNamingAnInstalledFamilyEmbedsIt() {
-        java.util.Map<String, java.util.List<com.wurstsoftware.htmltopdf4j.text.FontLibrary.Entry>> index =
-                com.wurstsoftware.htmltopdf4j.text.FontLibrary.index();
+        java.util.Map<String, java.util.List<FontEnvironment.Entry>> index =
+                FontEnvironment.shared().index();
         org.junit.jupiter.api.Assumptions.assumeFalse(index.isEmpty(), "no system fonts installed");
         String family = index.values().iterator().next().get(0).family();
 
@@ -139,5 +144,32 @@ class EngineTest {
                 "<p style=\"font-family: '" + family + "'\">Embedded text</p>");
 
         assertTrue(text(pdf).contains("/FontFile2"), "the named family should be embedded");
+    }
+
+    @Test
+    void aRenderCanBeGivenAFontSearchPathOfItsOwn() {
+        // The fonts a Fixture carries, which the machine need not have installed.
+        RenderOptions options = RenderOptions.builder()
+                .fontEnvironment(FontEnvironment.of(
+                        List.of(Path.of("src/test/resources/fixtures/features/fonts"))))
+                .build();
+
+        byte[] pdf = ENGINE.renderHtml("<p style=\"font-family: 'DejaVu Serif'\">Carried</p>", options);
+
+        assertTrue(text(pdf).contains("/FontFile2"), "the family on the search path should be embedded");
+        assertTrue(text(pdf).contains("DejaVuSerif"), "and it should be the one named");
+    }
+
+    @Test
+    void aRenderAgainstAnEnvironmentWithNoFontsFallsBackToTheStandardFace() {
+        // A machine with nothing installed still renders; it just draws with one
+        // of the fourteen Faces every reader already has.
+        RenderOptions options =
+                RenderOptions.builder().fontEnvironment(FontEnvironment.empty()).build();
+
+        byte[] pdf = ENGINE.renderHtml("<p style=\"font-family: serif\">Nothing to find</p>", options);
+
+        assertTrue(text(pdf).contains("/Helvetica"), "the default Face should carry the text");
+        assertFalse(text(pdf).contains("/FontFile2"), "and nothing should be embedded");
     }
 }

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.wurstsoftware.htmltopdf4j.text.FontEnvironment;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -23,6 +24,11 @@ class FontFaceSourceTest {
     @TempDir
     Path directory;
 
+    /** The unit under test, read against the fonts this machine has installed. */
+    private static byte[] read(String source, Path baseDirectory) {
+        return FontFaceSource.read(source, baseDirectory, FontEnvironment.shared());
+    }
+
     private Path write(String name, byte[] bytes) {
         try {
             Path path = directory.resolve(name);
@@ -37,15 +43,15 @@ class FontFaceSourceTest {
     void aUrlIsResolvedAgainstTheBaseDirectory() {
         write("brand.ttf", PROGRAM);
 
-        assertArrayEquals(PROGRAM, FontFaceSource.read("url(brand.ttf)", directory));
+        assertArrayEquals(PROGRAM, read("url(brand.ttf)", directory));
     }
 
     @Test
     void aQuotedUrlReadsTheSameFile() {
         write("brand.ttf", PROGRAM);
 
-        assertArrayEquals(PROGRAM, FontFaceSource.read("url('brand.ttf')", directory));
-        assertArrayEquals(PROGRAM, FontFaceSource.read("url(\"brand.ttf\")", directory));
+        assertArrayEquals(PROGRAM, read("url('brand.ttf')", directory));
+        assertArrayEquals(PROGRAM, read("url(\"brand.ttf\")", directory));
     }
 
     @Test
@@ -53,7 +59,7 @@ class FontFaceSourceTest {
         write("brand.ttf", PROGRAM);
 
         assertArrayEquals(
-                PROGRAM, FontFaceSource.read("url(brand.ttf) format(\"truetype\")", directory));
+                PROGRAM, read("url(brand.ttf) format(\"truetype\")", directory));
     }
 
     @Test
@@ -62,14 +68,14 @@ class FontFaceSourceTest {
 
         assertArrayEquals(
                 PROGRAM,
-                FontFaceSource.read("url(missing.ttf), url(second.ttf) format('truetype')", directory));
+                read("url(missing.ttf), url(second.ttf) format('truetype')", directory));
     }
 
     @Test
     void aBase64DataUriNeedsNoFile() {
         String source = "url(data:font/ttf;base64," + Base64.getEncoder().encodeToString(PROGRAM) + ")";
 
-        assertArrayEquals(PROGRAM, FontFaceSource.read(source, null));
+        assertArrayEquals(PROGRAM, read(source, null));
     }
 
     @Test
@@ -79,13 +85,13 @@ class FontFaceSourceTest {
         String source = "url(data:font/ttf;charset=utf-8;base64,"
                 + Base64.getEncoder().encodeToString(PROGRAM) + ")";
 
-        assertArrayEquals(PROGRAM, FontFaceSource.read(source, null));
+        assertArrayEquals(PROGRAM, read(source, null));
     }
 
     @Test
     void aRemoteUrlIsRefusedRatherThanFetched() {
-        assertNull(FontFaceSource.read("url(https://fonts.example.com/brand.woff2)", directory));
-        assertNull(FontFaceSource.read("url(http://fonts.example.com/brand.ttf)", directory));
+        assertNull(read("url(https://fonts.example.com/brand.woff2)", directory));
+        assertNull(read("url(http://fonts.example.com/brand.ttf)", directory));
     }
 
     @Test
@@ -94,29 +100,29 @@ class FontFaceSourceTest {
 
         assertArrayEquals(
                 PROGRAM,
-                FontFaceSource.read("url(https://fonts.example.com/brand.woff2), url(brand.ttf)", directory));
+                read("url(https://fonts.example.com/brand.woff2), url(brand.ttf)", directory));
     }
 
     @Test
     void aSourceThatNamesNothingReadableIsNull() {
-        assertNull(FontFaceSource.read("url(missing.ttf)", directory));
-        assertNull(FontFaceSource.read("", directory));
-        assertNull(FontFaceSource.read("nonsense", directory));
+        assertNull(read("url(missing.ttf)", directory));
+        assertNull(read("", directory));
+        assertNull(read("nonsense", directory));
     }
 
     @Test
     void aLocalFamilyThatIsNotInstalledIsNull() {
-        assertNull(FontFaceSource.read("local('No Such Family At All')", directory));
+        assertNull(read("local('No Such Family At All')", directory));
     }
 
     @Test
     void aLocalFamilyThatIsInstalledIsRead() {
-        java.util.Map<String, java.util.List<com.wurstsoftware.htmltopdf4j.text.FontLibrary.Entry>> index =
-                com.wurstsoftware.htmltopdf4j.text.FontLibrary.index();
+        java.util.Map<String, java.util.List<com.wurstsoftware.htmltopdf4j.text.FontEnvironment.Entry>> index =
+                com.wurstsoftware.htmltopdf4j.text.FontEnvironment.shared().index();
         org.junit.jupiter.api.Assumptions.assumeFalse(index.isEmpty(), "no system fonts installed");
         String family = index.values().iterator().next().get(0).family();
 
-        assertNotNull(FontFaceSource.read("local('" + family + "')", directory));
+        assertNotNull(read("local('" + family + "')", directory));
     }
 
     @Test
@@ -125,7 +131,7 @@ class FontFaceSourceTest {
 
         assertArrayEquals(
                 expected,
-                FontFaceSource.read(
+                read(
                         "url(data:font/ttf," + new String(expected, StandardCharsets.ISO_8859_1) + ")",
                         null));
     }
@@ -135,7 +141,7 @@ class FontFaceSourceTest {
         byte[] sfnt = systemFont();
         write("brand.woff", com.wurstsoftware.htmltopdf4j.text.WoffFixture.wrap(sfnt));
 
-        byte[] loaded = FontFaceSource.read("url(brand.woff) format('woff')", directory);
+        byte[] loaded = read("url(brand.woff) format('woff')", directory);
 
         assertNotNull(loaded);
         assertEquals(0x00010000, java.nio.ByteBuffer.wrap(loaded).getInt(0));
@@ -162,7 +168,7 @@ class FontFaceSourceTest {
 
         assertArrayEquals(
                 PROGRAM,
-                FontFaceSource.read("url(brand.woff2) format('woff2'), url(brand.ttf)", directory));
+                read("url(brand.woff2) format('woff2'), url(brand.ttf)", directory));
     }
 
     @Test
@@ -175,7 +181,7 @@ class FontFaceSourceTest {
 
         assertArrayEquals(
                 OTHER_PROGRAM,
-                FontFaceSource.read("url(hinted.bin) format('woff2'), url(brand.ttf)", directory));
+                read("url(hinted.bin) format('woff2'), url(brand.ttf)", directory));
     }
 
     @Test
@@ -183,7 +189,7 @@ class FontFaceSourceTest {
         write("brand.ttf", PROGRAM);
 
         assertArrayEquals(
-                PROGRAM, FontFaceSource.read("url(brand.ttf) format('truetype')", directory));
+                PROGRAM, read("url(brand.ttf) format('truetype')", directory));
     }
 
     private static byte[] systemFont() {

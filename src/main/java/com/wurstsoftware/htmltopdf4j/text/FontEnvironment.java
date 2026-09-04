@@ -8,25 +8,34 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import org.apache.fontbox.ttf.NameRecord;
 import org.apache.fontbox.ttf.TTFParser;
 import org.apache.fontbox.ttf.TrueTypeFont;
 
 /**
- * The Faces installed on this machine, indexed by family, weight and slope.
+ * The Faces a render may draw with: a search path, the index scanned from it,
+ * and the Faces already parsed out of it.
  *
  * <p>This replaces the reference's font database. There is no JDK API that gives
  * both a family name and the file it came from — {@code GraphicsEnvironment}
  * gives the names but not the bytes, which a Document needs in order to embed
  * and subset — so the font directories are scanned directly.
  *
- * <p>The scan reads only each font's {@code name} table, and happens once for
- * the life of the process. A machine's installed fonts do not change while a
- * render is running, and re-scanning per render would dominate the render time.
+ * <p>An environment scans its directories once, on first use, and caches every
+ * Face it parses. A machine's installed fonts do not change while a render is
+ * running, and re-scanning per render would dominate the render time. The scan
+ * and the cache belong to the environment rather than to the process, so a
+ * caller who wants a different search path — or none at all — makes its own
+ * environment and hands it to {@code RenderOptions}. Callers who do not care
+ * share {@link #shared()}, and pay for one scan between them.
+ *
+ * <p>An environment is safe to share between threads and between renders.
  */
-public final class FontLibrary {
+public final class FontEnvironment {
 
     /** The families a generic CSS family resolves to, in order of preference. */
     private static final Map<String, List<String>> GENERIC_FAMILIES = Map.of(
@@ -63,13 +72,45 @@ public final class FontLibrary {
         }
     }
 
-    private static volatile Map<String, List<Entry>> index;
-    private static volatile Map<String, Entry> byName;
+    /**
+     * The environment callers who ask for none get: the machine's own font
+     * directories, scanned once for the life of the process.
+     */
+    private static final FontEnvironment SHARED = new FontEnvironment(null);
 
-    private FontLibrary() {}
+    /** The Faces parsed from this environment's files, keyed by absolute path. */
+    private final Map<Path, EmbeddedFace> parsed = new ConcurrentHashMap<>();
 
-    /** Every installed font, keyed by lower-case family name. */
-    public static Map<String, List<Entry>> index() {
+    /** The directories to scan, or {@code null} for the machine's own. */
+    private final List<Path> searchPath;
+
+    private volatile Map<String, List<Entry>> index;
+    private volatile Map<String, Entry> byName;
+
+    private FontEnvironment(List<Path> searchPath) {
+        this.searchPath = searchPath;
+    }
+
+    /** The environment a render uses when the caller names none. */
+    public static FontEnvironment shared() {
+        return SHARED;
+    }
+
+    /**
+     * An environment that looks only in the given directories, each scanned to a
+     * depth of six. Nothing installed on the machine is visible to it.
+     */
+    public static FontEnvironment of(List<Path> searchPath) {
+        return new FontEnvironment(List.copyOf(Objects.requireNonNull(searchPath, "searchPath")));
+    }
+
+    /** An environment with no fonts at all: every family falls back to the default Face. */
+    public static FontEnvironment empty() {
+        return of(List.of());
+    }
+
+    /** Every font this environment can see, keyed by lower-case family name. */
+    public Map<String, List<Entry>> index() {
         ensureScanned();
         return index;
     }
@@ -81,16 +122,73 @@ public final class FontLibrary {
      * is a full name that a family index has no key for — so the face's own
      * names are tried first and the family index is the fallback.
      */
-    public static Optional<Entry> local(String name) {
+    public Optional<Entry> local(String name) {
         ensureScanned();
-        String key = key(name);
-        Entry named = byName.get(key);
+        Entry named = byName.get(key(name));
         return named != null ? Optional.of(named) : find(name, false, false);
     }
 
-    private static void ensureScanned() {
+    /**
+     * The best font in this environment for a CSS family, or empty when nothing
+     * matches. Generic families resolve through their candidate lists.
+     */
+    public Optional<Entry> find(String family, boolean bold, boolean italic) {
+        String key = key(family);
+        List<String> candidates = GENERIC_FAMILIES.getOrDefault(key, List.of(key));
+        for (String candidate : candidates) {
+            Optional<Entry> match = best(index().get(candidate), bold, italic);
+            if (match.isPresent()) {
+                return match;
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** The first of {@code families} this environment can see. */
+    public Optional<Entry> findAny(List<String> families, boolean bold, boolean italic) {
+        for (String family : families) {
+            Optional<Entry> match = find(family, bold, italic);
+            if (match.isPresent()) {
+                return match;
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The Face an entry's file holds, parsed once per environment. A file the
+     * shaper cannot read is simply not offered, the same as one that is absent.
+     */
+    public Optional<Face> open(Entry entry) {
+        EmbeddedFace cached = parsed.get(entry.path());
+        if (cached != null) {
+            return Optional.of(cached);
+        }
+        try {
+            EmbeddedFace face = EmbeddedFace.fromBytes(Files.readAllBytes(entry.path()), entry.family());
+            parsed.put(entry.path(), face);
+            return Optional.of(face);
+        } catch (IOException | RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<Entry> best(List<Entry> entries, boolean bold, boolean italic) {
+        return entries == null
+                ? Optional.empty()
+                : entries.stream().min((a, b) ->
+                        Integer.compare(a.distanceTo(bold, italic), b.distanceTo(bold, italic)));
+    }
+
+    private static String key(String name) {
+        return name.trim().toLowerCase(Locale.ROOT).replaceAll("^['\"]|['\"]$", "").trim();
+    }
+
+    // --- Scanning -----------------------------------------------------------
+
+    private void ensureScanned() {
         if (index == null) {
-            synchronized (FontLibrary.class) {
+            synchronized (this) {
                 if (index == null) {
                     Map<String, List<Entry>> scanned = scan();
                     byName = nameIndex(scanned);
@@ -112,47 +210,10 @@ public final class FontLibrary {
         return Map.copyOf(named);
     }
 
-    private static String key(String name) {
-        return name.trim().toLowerCase(Locale.ROOT).replaceAll("^['\"]|['\"]$", "").trim();
-    }
-
-    /**
-     * The best installed font for a CSS family, or empty when nothing matches.
-     * Generic families resolve through their candidate lists.
-     */
-    public static Optional<Entry> find(String family, boolean bold, boolean italic) {
-        String key = key(family);
-        List<String> candidates = GENERIC_FAMILIES.getOrDefault(key, List.of(key));
-        for (String candidate : candidates) {
-            Optional<Entry> match = best(index().get(candidate), bold, italic);
-            if (match.isPresent()) {
-                return match;
-            }
+    private List<Path> directories() {
+        if (searchPath != null) {
+            return searchPath.stream().filter(Files::isDirectory).toList();
         }
-        return Optional.empty();
-    }
-
-    /** The first of {@code families} that is installed. */
-    public static Optional<Entry> findAny(List<String> families, boolean bold, boolean italic) {
-        for (String family : families) {
-            Optional<Entry> match = find(family, bold, italic);
-            if (match.isPresent()) {
-                return match;
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static Optional<Entry> best(List<Entry> entries, boolean bold, boolean italic) {
-        return entries == null
-                ? Optional.empty()
-                : entries.stream().min((a, b) ->
-                        Integer.compare(a.distanceTo(bold, italic), b.distanceTo(bold, italic)));
-    }
-
-    // --- Scanning -----------------------------------------------------------
-
-    private static List<Path> fontDirectories() {
         String home = System.getProperty("user.home", "");
         return Stream.of(
                         "/usr/share/fonts",
@@ -164,17 +225,17 @@ public final class FontLibrary {
                         "/Library/Fonts",
                         home + "/Library/Fonts",
                         System.getenv("WINDIR") == null ? null : System.getenv("WINDIR") + "\\Fonts")
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .map(Path::of)
                 .filter(Files::isDirectory)
                 .toList();
     }
 
-    private static Map<String, List<Entry>> scan() {
+    private Map<String, List<Entry>> scan() {
         Map<String, List<Entry>> found = new HashMap<>();
-        for (Path directory : fontDirectories()) {
+        for (Path directory : directories()) {
             try (Stream<Path> files = Files.walk(directory, 6)) {
-                files.filter(FontLibrary::isFontFile).forEach(file -> add(found, file));
+                files.filter(FontEnvironment::isFontFile).forEach(file -> add(found, file));
             } catch (IOException | RuntimeException e) {
                 // An unreadable font directory means fewer Faces, not a failed
                 // render: the default Face always remains available.

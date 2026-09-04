@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.wurstsoftware.htmltopdf4j.FaceSource;
 import com.wurstsoftware.htmltopdf4j.style.ComputedStyle;
-import com.wurstsoftware.htmltopdf4j.text.FontLibrary;
+import com.wurstsoftware.htmltopdf4j.text.FontEnvironment;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.List;
@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class FaceRegistryTest {
 
     private static FaceRegistry registry() {
-        return new FaceRegistry(FaceSource.HELVETICA);
+        return new FaceRegistry(FaceSource.HELVETICA, FontEnvironment.shared());
     }
 
     private static ComputedStyle style(Map<String, String> declarations) {
@@ -28,8 +28,8 @@ class FaceRegistryTest {
 
     /** An installed family that ships both a regular and a bold file. */
     private static Optional<String> familyWithRealBold() {
-        return FontLibrary.index().values().stream()
-                .filter(entries -> entries.stream().anyMatch(FontLibrary.Entry::bold)
+        return FontEnvironment.shared().index().values().stream()
+                .filter(entries -> entries.stream().anyMatch(FontEnvironment.Entry::bold)
                         && entries.stream().anyMatch(entry -> !entry.bold()))
                 .map(entries -> entries.get(0).family())
                 .findFirst();
@@ -69,7 +69,7 @@ class FaceRegistryTest {
         FaceRegistry faces = registry();
         int index = faces.indexFor(style(Map.of("font-family", "No Such Family At All")));
 
-        Assumptions.assumeFalse(FontLibrary.index().isEmpty(), "no system fonts to fall back to");
+        Assumptions.assumeFalse(FontEnvironment.shared().index().isEmpty(), "no system fonts to fall back to");
         assertFalse(faces.chain(index).fallbacks().isEmpty());
     }
 
@@ -104,14 +104,14 @@ class FaceRegistryTest {
 
     @Test
     void aDeclaredFontFaceBeatsAnInstalledFamilyOfTheSameName() throws IOException {
-        String family = FontLibrary.index().values().stream()
+        String family = FontEnvironment.shared().index().values().stream()
                 .map(entries -> entries.get(0))
                 .findFirst()
-                .map(FontLibrary.Entry::family)
+                .map(FontEnvironment.Entry::family)
                 .orElse(null);
         Assumptions.assumeTrue(family != null, "no system fonts installed");
         byte[] program = Files.readAllBytes(
-                FontLibrary.find(family, false, false).orElseThrow().path());
+                FontEnvironment.shared().find(family, false, false).orElseThrow().path());
 
         FaceRegistry faces = registry();
         faces.declare("Brand", false, false, program);
@@ -142,8 +142,8 @@ class FaceRegistryTest {
     void aSecondFontFaceRuleSuppliesTheRealBoldVariant() throws IOException {
         String family = familyWithRealBold().orElse(null);
         Assumptions.assumeTrue(family != null, "no installed family ships a real bold");
-        byte[] regular = Files.readAllBytes(FontLibrary.find(family, false, false).orElseThrow().path());
-        byte[] bold = Files.readAllBytes(FontLibrary.find(family, true, false).orElseThrow().path());
+        byte[] regular = Files.readAllBytes(FontEnvironment.shared().find(family, false, false).orElseThrow().path());
+        byte[] bold = Files.readAllBytes(FontEnvironment.shared().find(family, true, false).orElseThrow().path());
 
         FaceRegistry faces = registry();
         faces.declare("Brand", false, false, regular);
@@ -158,12 +158,12 @@ class FaceRegistryTest {
 
     @Test
     void aFamilyDeclaredOnlyOnceServesEveryWeightItWasNotGiven() throws IOException {
-        String family = FontLibrary.index().values().stream()
+        String family = FontEnvironment.shared().index().values().stream()
                 .map(entries -> entries.get(0).family())
                 .findFirst()
                 .orElse(null);
         Assumptions.assumeTrue(family != null, "no system fonts installed");
-        byte[] program = Files.readAllBytes(FontLibrary.find(family, false, false).orElseThrow().path());
+        byte[] program = Files.readAllBytes(FontEnvironment.shared().find(family, false, false).orElseThrow().path());
 
         FaceRegistry faces = registry();
         faces.declare("Brand", false, false, program);

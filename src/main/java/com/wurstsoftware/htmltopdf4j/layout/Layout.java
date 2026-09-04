@@ -91,10 +91,10 @@ public final class Layout {
     private Layout(RenderOptions options, Stylesheet stylesheet) {
         this.options = options;
         this.pageSize = options.pageSize();
-        this.faces = new FaceRegistry(options.defaultFace());
+        this.faces = new FaceRegistry(options.defaultFace(), options.fontEnvironment());
         this.images = new ImageLoader(options.baseDirectory().orElse(null));
         this.breaker = new LineBreaker(faces::indexFor, faces::chain, this::measureAtomic);
-        declareFontFaces(stylesheet, options.baseDirectory().orElse(null));
+        declareFontFaces(stylesheet, options.baseDirectory().orElse(null), options.fontEnvironment());
 
         Edges margins = pageMargins(stylesheet, options);
         this.pageMargins = margins;
@@ -122,9 +122,12 @@ public final class Layout {
      * read leaves the family unresolved, and the next family in the Cascade's
      * list takes over.
      */
-    private void declareFontFaces(Stylesheet stylesheet, java.nio.file.Path baseDirectory) {
+    private void declareFontFaces(
+            Stylesheet stylesheet,
+            java.nio.file.Path baseDirectory,
+            com.wurstsoftware.htmltopdf4j.text.FontEnvironment fonts) {
         for (FontFaceRules rule : FontFaceRules.of(stylesheet)) {
-            byte[] program = FontFaceSource.read(rule.source(), baseDirectory);
+            byte[] program = FontFaceSource.read(rule.source(), baseDirectory, fonts);
             if (program != null) {
                 faces.declare(rule.family(), rule.bold(), rule.italic(), program);
             }
