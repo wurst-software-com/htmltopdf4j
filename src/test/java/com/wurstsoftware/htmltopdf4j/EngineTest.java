@@ -2,6 +2,7 @@ package com.wurstsoftware.htmltopdf4j;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -113,5 +114,30 @@ class EngineTest {
         assertEquals(options.marginBottom(), copy.marginBottom());
         assertEquals(options.marginLeft(), copy.marginLeft());
         assertEquals(options.pageSize(), copy.pageSize());
+    }
+
+    @Test
+    void aLatinDocumentNamingNoFamilyEmbedsNoFace() {
+        // Helvetica is one of the fourteen every reader already has, so a plain
+        // Latin Document should carry no font program at all: embedding one
+        // would add a hundred kilobytes to every trivial render.
+        byte[] pdf = ENGINE.renderHtml("<p>Plain Latin text with <b>bold</b> and <i>italic</i>.</p>");
+
+        assertTrue(text(pdf).contains("/Helvetica"), "the standard face should be named");
+        assertFalse(text(pdf).contains("/FontFile2"), "no font program should be embedded");
+        assertFalse(text(pdf).contains("/FontFile3"), "no font program should be embedded");
+    }
+
+    @Test
+    void aDocumentNamingAnInstalledFamilyEmbedsIt() {
+        java.util.Map<String, java.util.List<com.wurstsoftware.htmltopdf4j.text.FontLibrary.Entry>> index =
+                com.wurstsoftware.htmltopdf4j.text.FontLibrary.index();
+        org.junit.jupiter.api.Assumptions.assumeFalse(index.isEmpty(), "no system fonts installed");
+        String family = index.values().iterator().next().get(0).family();
+
+        byte[] pdf = ENGINE.renderHtml(
+                "<p style=\"font-family: '" + family + "'\">Embedded text</p>");
+
+        assertTrue(text(pdf).contains("/FontFile2"), "the named family should be embedded");
     }
 }

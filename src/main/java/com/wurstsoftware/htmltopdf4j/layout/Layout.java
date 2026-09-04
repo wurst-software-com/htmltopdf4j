@@ -342,9 +342,16 @@ public final class Layout {
         layoutChildren(block.children(), contentX, innerWidth);
         y += padding.bottom() + border.bottom();
 
-        float minimumHeight = style.length("height")
-                .map(height -> style.resolve(height, contentBottom - contentTop))
-                .orElse(0f);
+        // `height` on a block that overflows it behaves as a minimum here, so
+        // `min-height` is the same rule under a different name and the taller of
+        // the two wins.
+        float minimumHeight = Math.max(
+                style.length("height")
+                        .map(height -> style.resolve(height, contentBottom - contentTop))
+                        .orElse(0f),
+                style.length("min-height")
+                        .map(height -> style.resolve(height, contentBottom - contentTop))
+                        .orElse(0f));
         if (pageIndex == startPage && y - startY < minimumHeight) {
             y = startY + minimumHeight;
         }

@@ -274,6 +274,39 @@ class LayoutTest {
     }
 
     @Test
+    void adjacentLinkedWordsOnOneLineShareOneRect() {
+        // Each word is its own drawn run, so without merging a three-word link
+        // would put three separate annotations over one phrase.
+        Laid laid = Laid.of("<p><a href='https://example.com'>Click right here</a></p>");
+
+        List<LinkArea> areas = laid.pages().get(0).linkAreas();
+        assertEquals(1, areas.size());
+        assertTrue(areas.get(0).rect().width() > laid.text("Click").text().length() * 2f);
+    }
+
+    @Test
+    void aLinkThatWrapsGetsARectPerLine() {
+        Laid laid = Laid.of(
+                "<p style='width: 120pt'><a href='https://example.com'>"
+                        + "One two three four five six seven eight nine ten</a></p>");
+
+        List<LinkArea> areas = laid.pages().get(0).linkAreas();
+        assertTrue(areas.size() > 1, "a wrapped link cannot be one rectangle");
+        assertEquals(
+                areas.size(),
+                areas.stream().map(area -> area.rect().y()).distinct().count(),
+                "one rect per line, not one per word");
+    }
+
+    @Test
+    void twoDifferentLinksSideBySideStayApart() {
+        Laid laid = Laid.of(
+                "<p><a href='https://one.example'>One</a> <a href='https://two.example'>Two</a></p>");
+
+        assertEquals(2, laid.pages().get(0).linkAreas().size());
+    }
+
+    @Test
     void anIdBecomesAnAnchorAndAHeadingBecomesAnOutlineEntry() {
         Laid laid = Laid.of("<h1 id='intro'>Introduction</h1>");
 
@@ -328,6 +361,26 @@ class LayoutTest {
         assertTrue(laid.text("First").x() < laid.text("Second").x());
     }
 
+    @Test
+    void aMinimumHeightHoldsAShortBlockOpen() {
+        Laid laid = Laid.of(
+                "<div style='min-height: 100pt'>Short</div><p>Below</p>");
+
+        assertTrue(laid.text("Short").y() - laid.text("Below").y() > 100f,
+                "the following block should clear the reserved height");
+    }
+
+    @Test
+    void aMinimumHeightSmallerThanTheContentChangesNothing() {
+        Laid tall = Laid.of("<div style='min-height: 4pt'>Short</div><p>Below</p>");
+        Laid plain = Laid.of("<div>Short</div><p>Below</p>");
+
+        assertEquals(
+                plain.text("Short").y() - plain.text("Below").y(),
+                tall.text("Short").y() - tall.text("Below").y(),
+                TOLERANCE);
+    }
+
     // --- Grid --------------------------------------------------------------
 
     @Test
@@ -358,6 +411,65 @@ class LayoutTest {
                         + "<div>A</div><div>B</div></div>");
 
         assertEquals(100f, laid.text("B").x() - laid.text("A").x(), 2f);
+    }
+
+    @Test
+    void aFixedRowTrackSetsTheRowHeightRatherThanTheContent() {
+        Laid laid = Laid.of(
+                "<div style='display:grid; grid-template-columns: 1fr 1fr;"
+                        + " grid-template-rows: 80pt 40pt'>"
+                        + "<div>A</div><div>B</div><div>C</div><div>D</div></div>");
+
+        // The first row is 80pt tall whatever its one line of text needs.
+        assertEquals(80f, laid.text("A").y() - laid.text("C").y(), 1f);
+    }
+
+    @Test
+    void aFractionalRowTrackSharesTheContainersDefiniteHeight() {
+        Laid laid = Laid.of(
+                "<div style='display:grid; grid-template-columns: 1fr;"
+                        + " grid-template-rows: 1fr 2fr; height: 180pt'>"
+                        + "<div>A</div><div>B</div></div>");
+
+        assertEquals(60f, laid.text("A").y() - laid.text("B").y(), 1f);
+    }
+
+    @Test
+    void anAutoRowStillTakesItsHeightFromItsContent() {
+        Laid laid = Laid.of(
+                "<div style='display:grid; grid-template-columns: 1fr;"
+                        + " grid-template-rows: auto auto'>"
+                        + "<div>A</div><div>B</div></div>");
+
+        assertTrue(laid.text("A").y() - laid.text("B").y() < 40f);
+    }
+
+    @Test
+    void alignItemsCentresAnItemInATallerRow() {
+        Laid laid = Laid.of(
+                "<div style='display:grid; grid-template-columns: 1fr;"
+                        + " grid-template-rows: 100pt; align-items: center'>"
+                        + "<div>A</div></div>"
+                        + "<div style='display:grid; grid-template-columns: 1fr;"
+                        + " grid-template-rows: 100pt'>"
+                        + "<div>B</div></div>");
+
+        // A sits half a track lower than B, which is still at the track's top.
+        float top = laid.text("B").y() + 100f;
+        assertTrue(laid.text("A").y() < top - 30f && laid.text("A").y() > top - 60f,
+                "expected A near the middle of its track, was " + laid.text("A").y());
+    }
+
+    @Test
+    void alignSelfOverridesTheContainersAlignItems() {
+        Laid laid = Laid.of(
+                "<div style='display:grid; grid-template-columns: 1fr 1fr;"
+                        + " grid-template-rows: 100pt; align-items: center'>"
+                        + "<div style='align-self: flex-start'>A</div>"
+                        + "<div style='align-self: flex-end'>B</div></div>");
+
+        assertTrue(laid.text("A").y() - laid.text("B").y() > 60f,
+                "start and end of a 100pt track should be far apart");
     }
 
     // --- Tables ------------------------------------------------------------
