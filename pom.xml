@@ -12,6 +12,16 @@
   <name>htmltopdf4j</name>
   <description>Pure Java 21 HTML/CSS to PDF rendering engine</description>
 
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+      <comments>A port of the Rust htmltopdf engine by Sanzar Rahman, used under
+        the MIT licence; see THIRD-PARTY-NOTICES.md.</comments>
+    </license>
+  </licenses>
+
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -57,6 +67,21 @@
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- The MIT licence requires the notice to accompany every copy, and a
+           jar handed to a caller is a copy. -->
+      <resource>
+        <directory>${project.basedir}</directory>
+        <targetPath>META-INF</targetPath>
+        <includes>
+          <include>LICENSE</include>
+          <include>THIRD-PARTY-NOTICES.md</include>
+        </includes>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

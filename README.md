@@ -3,8 +3,9 @@
 A pure-Java HTML-to-PDF rendering engine. HTML and CSS go in, PDF bytes come
 out, with no browser subprocess, no native library and no temporary files.
 
-It is a hand-written translation of the Rust `htmltopdf` engine into idiomatic
-Java 21, and it is a *library*: there is no CLI, no HTTP server and no scripting
+It is a hand-written translation of the Rust [`htmltopdf`](https://github.com/SanzarRehman/html2pdf)
+engine by Sanzar Rahman into idiomatic Java 21, used under the MIT licence, and
+it is a *library*: there is no CLI, no HTTP server and no scripting
 stage. Rendering is deliberately offline — a Document that names an `http(s)`
 image or font makes no network request.
 
@@ -119,3 +120,15 @@ it does not have, so a machine without those families will see them fail.
 - [docs/coverage-matrix.md](docs/coverage-matrix.md) — what renders, and how well.
 - [docs/reference-tests.md](docs/reference-tests.md) — every one of the Rust
   engine's 219 unit tests, and whether it was ported or dropped.
+
+## Licence
+
+htmltopdf4j is MIT-licensed — see [LICENSE](LICENSE).
+
+This library is a Java port of the `htmltopdf` rendering engine originally
+written in Rust by Sanzar Rahman (<https://github.com/SanzarRehman/html2pdf>),
+used under the MIT licence. A port is a derivative work, so the upstream
+copyright and permission notice travels with this one: it is reproduced, with
+what it covers and where the grant comes from, in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), which also lists the licences
+of the declared dependencies.
