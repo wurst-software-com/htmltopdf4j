@@ -297,18 +297,44 @@ public final class LineBreaker {
     }
 
     private VisualLine finish(List<Fragment> fragments, float width) {
+        Extent extent = extentOf(fragments);
+        float leading = 0f;
+        for (Fragment fragment : fragments) {
+            if (fragment instanceof TextFragment text) {
+                FaceChain chain = chains.apply(text.face());
+                leading = Math.max(leading, extraLeading(text.run().style(), chain, text.size()));
+            }
+        }
+        return new VisualLine(fragments, width, extent.ascent(), extent.descent(), leading);
+    }
+
+    /** How far a run of fragments reaches above and below the baseline they share. */
+    public record Extent(float ascent, float descent) {
+
+        public float height() {
+            return ascent + descent;
+        }
+    }
+
+    /**
+     * The extent of some fragments: the tallest ascent and the deepest descent
+     * among them, from the Faces' own metrics rather than a ratio of the font
+     * size.
+     *
+     * <p>A whole line is measured this way, and so is the slice of one an inline
+     * box covers — a box spanning two font sizes has to be as tall as the taller
+     * of them, on each line it occupies.
+     */
+    public Extent extentOf(List<Fragment> fragments) {
         float ascent = 0f;
         float descent = 0f;
-        float leading = 0f;
         for (Fragment fragment : fragments) {
             switch (fragment) {
                 case TextFragment text -> {
                     FaceChain chain = chains.apply(text.face());
                     float size = text.size();
                     ascent = Math.max(ascent, chain.primary().lineAscentFraction() * size);
-                    float faceDescent = Math.abs(chain.primary().descent(size));
-                    descent = Math.max(descent, faceDescent);
-                    leading = Math.max(leading, extraLeading(text.run().style(), chain, size));
+                    descent = Math.max(descent, Math.abs(chain.primary().descent(size)));
                 }
                 case AtomicFragment atomic -> {
                     ascent = Math.max(ascent, atomic.baseline());
@@ -316,10 +342,7 @@ public final class LineBreaker {
                 }
             }
         }
-        if (fragments.isEmpty()) {
-            ascent = 0f;
-        }
-        return new VisualLine(fragments, width, ascent, descent, leading);
+        return new Extent(ascent, descent);
     }
 
     /**

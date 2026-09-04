@@ -115,6 +115,53 @@ class InlineDecorationTest {
     }
 
     @Test
+    void aBoxOverTwoFontSizesCoversTheTallerOne() {
+        Laid oneSize = Laid.of("<p><span style='background:#e8f1f8'>small small</span></p>");
+        Laid mixed = Laid.of("<p><span style='background:#e8f1f8'>small "
+                + "<b style='font-size:24pt'>BIG</b></span></p>");
+
+        Rect covering = chipFills(mixed).get(0);
+        assertTrue(covering.height() > chipFills(oneSize).get(0).height() + 10f,
+                "a box holding a 24pt run is not the height of its 12pt one");
+        assertTrue(covering.y() + covering.height() >= mixed.text("BIG").y() + 24f * 0.7f,
+                "the big text's ascent is inside its own background, not above it");
+        assertTrue(covering.y() <= mixed.text("BIG").y() - 24f * 0.15f,
+                "and its descent is inside too");
+    }
+
+    @Test
+    void eachLineIsDrawnToWhatThatLineHolds() {
+        // The tall run is on the second line, so the first line's rectangle is
+        // the short one and the second line's is the tall one.
+        Laid laid = Laid.of("<p style='width:120pt'><span style='background:#e8f1f8'>"
+                + "one two three four five <b style='font-size:24pt'>BIG</b></span></p>");
+
+        List<Rect> fills = chipFills(laid);
+        assertTrue(fills.size() >= 2, "the chip should take more than one line");
+        Rect last = fills.get(fills.size() - 1);
+        Rect first = fills.get(0);
+        assertTrue(last.height() > first.height() + 10f,
+                "the line carrying the 24pt run is the taller rectangle");
+    }
+
+    @Test
+    void theBoxIsAsTallAsItsFaceSaysRatherThanAFixedRatio() {
+        Laid laid = Laid.of("<p><span style='background:#e8f1f8; font-size:20pt'>CHIP</span></p>");
+        Rect fill = chipFills(laid).get(0);
+
+        // Helvetica's own ascent and descent, at 20pt, from the Face's metrics.
+        com.wurstsoftware.htmltopdf4j.text.Face face =
+                com.wurstsoftware.htmltopdf4j.text.Standard14Face.HELVETICA;
+        float ascent = face.lineAscentFraction() * 20f;
+        float descent = Math.abs(face.descent(20f));
+
+        assertEquals(ascent + descent, fill.height(), 0.5f,
+                "the rectangle is the Face's ascent plus its descent, not a fixed 1.2 of the size");
+        assertEquals(laid.text("CHIP").y() - descent, fill.y(), 0.5f,
+                "and it sits a real descent below the baseline");
+    }
+
+    @Test
     void anUndecoratedInlineBoxPaintsNothing() {
         Laid laid = Laid.of("<p>plain <span>text</span> here</p>");
 

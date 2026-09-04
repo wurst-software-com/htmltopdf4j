@@ -898,11 +898,12 @@ public final class Layout {
         float right = origins[last] + fragments.get(last).x() + fragments.get(last).width()
                 + (closesHere ? padding.right() + border.right() : 0f);
 
-        // The box is as tall as the text it wraps, which is the same extent a
-        // link area covers, grown by the box's own padding and border.
-        float size = fragments.get(first).run().style().fontSize();
-        float bottom = pdfY(baseline) - size * 0.25f - padding.bottom() - border.bottom();
-        float height = size * 1.2f + padding.vertical() + border.vertical();
+        // The box is as tall as everything it wraps on this line — its tallest
+        // ascent above the baseline, its deepest descent below it, from the
+        // Faces' own metrics — grown by the box's own padding and border.
+        LineBreaker.Extent extent = breaker.extentOf(fragments.subList(first, last + 1));
+        float bottom = pdfY(baseline) - extent.descent() - padding.bottom() - border.bottom();
+        float height = extent.height() + padding.vertical() + border.vertical();
         Rect rect = new Rect(left, bottom, Math.max(0f, right - left), height);
 
         // A rounded corner belongs to a whole box: a box cut by a line break is
