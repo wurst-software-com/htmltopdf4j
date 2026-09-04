@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Assumptions;
  * usable fonts skips rather than fails: it cannot tell us anything about Parity
  * either way.
  */
-final class TestFaces {
+public final class TestFonts {
 
     private static final List<Path> ROOTS =
             List.of(
@@ -23,10 +23,10 @@ final class TestFaces {
                     Path.of("/usr/local/share/fonts"),
                     Path.of(System.getProperty("user.home"), ".fonts"));
 
-    private TestFaces() {}
+    private TestFonts() {}
 
     /** A handful of distinct system faces, enough to catch a format-specific assumption. */
-    static List<Path> available() {
+    public static List<Path> available() {
         List<Path> faces = scan();
         Assumptions.assumeFalse(faces.isEmpty(), "no system fonts to test against");
         return faces;
@@ -35,7 +35,7 @@ final class TestFaces {
     private static List<Path> scan() {
         return ROOTS.stream()
                 .filter(Files::isDirectory)
-                .flatMap(TestFaces::walk)
+                .flatMap(TestFonts::walk)
                 .filter(path -> path.toString().endsWith(".ttf"))
                 // Variable fonts expose an interpolated instance to AWT whose
                 // metrics need not match the default instance in the file, so

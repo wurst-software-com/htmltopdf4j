@@ -29,7 +29,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 class GlyphIdentityTest {
 
     static Stream<Path> systemFaces() {
-        return TestFaces.available().stream();
+        return TestFonts.available().stream();
     }
 
     @ParameterizedTest(name = "{0}")
@@ -141,7 +141,7 @@ class GlyphIdentityTest {
     @Test
     void atLeastOneSystemFaceFormsLigatures() throws IOException {
         boolean anyLigated = false;
-        for (Path path : TestFaces.available()) {
+        for (Path path : TestFonts.available()) {
             Face face = Face.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
             ShapedRun shaped = face.shape("ffl", 1000f, Direction.LTR, ShapingFeatures.SHAPED);
             if (shaped.glyphs().size() == 1) {
@@ -161,7 +161,7 @@ class GlyphIdentityTest {
     @Test
     void atLeastOneSystemFaceKerns() throws IOException {
         boolean anyKerned = false;
-        for (Path path : TestFaces.available()) {
+        for (Path path : TestFonts.available()) {
             Face face = Face.fromBytes(Files.readAllBytes(path), path.getFileName().toString());
             for (String pair : new String[] {"AV", "To"}) {
                 float unkerned = face.measure(pair, 1000f, Direction.LTR, ShapingFeatures.NONE);
