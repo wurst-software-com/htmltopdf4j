@@ -51,6 +51,12 @@ public final class Standard14Face implements Face {
         return "Helvetica";
     }
 
+    /** Only regular Helvetica is offered, so a bold request is always synthesised. */
+    @Override
+    public boolean bold() {
+        return false;
+    }
+
     /** The name the PDF {@code /BaseFont} entry references. */
     public String baseFontName() {
         return "Helvetica";

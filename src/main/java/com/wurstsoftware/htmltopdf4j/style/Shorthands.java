@@ -273,7 +273,6 @@ public final class Shorthands {
         return parts.isEmpty() ? value.trim() : parts.get(0);
     }
 
-    /** Splits on whitespace, keeping bracketed function arguments together. */
     /**
      * {@code border-radius} takes one to four corner radii, in the same
      * clockwise-from-top-left order the other four-value shorthands use.
@@ -293,6 +292,7 @@ public final class Shorthands {
         longhands.put("border-bottom-left-radius", bottomLeft);
     }
 
+    /** Splits on whitespace, keeping bracketed function arguments together. */
     static List<String> tokens(String value) {
         List<String> parts = new ArrayList<>();
         StringBuilder current = new StringBuilder();

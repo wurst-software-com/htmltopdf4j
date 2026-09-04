@@ -90,7 +90,7 @@ final class MarginBoxes {
             case LEFT, JUSTIFY -> contentLeft;
         };
         page.add(new PaintCommand.SetFillColor(style.color()));
-        page.add(new PaintCommand.Text(text, x, baseline, size, face, style.bold(), 0f));
+        page.add(new PaintCommand.Text(text, x, baseline, size, face, faces.syntheticBold(face), 0f));
     }
 
     /**

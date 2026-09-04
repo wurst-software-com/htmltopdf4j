@@ -256,4 +256,60 @@ class CascadeTest {
         assertEquals(ComputedStyle.INITIAL_FONT_SIZE * 2f, style.fontSize(), 0.01f);
         assertTrue(style.bold());
     }
+
+    // --- Pseudo-elements ----------------------------------------------------
+
+    /** Cascades a Document and returns the pseudo-element style of {@code #target}. */
+    private static java.util.Optional<ComputedStyle> pseudoOfTarget(
+            String css, String bodyHtml, Cascade.Pseudo pseudo) {
+        Document document = Jsoup.parse("<html><body><style>" + css + "</style>" + bodyHtml + "</body></html>");
+        Cascade cascade = Cascade.apply(document, Cascade.authorStylesheet(document));
+        return cascade.pseudoStyleOf(document.selectFirst("#target"), pseudo);
+    }
+
+    @Test
+    void aBeforeRuleGivesTheElementABeforePseudoStyle() {
+        ComputedStyle style = pseudoOfTarget(
+                "#target::before { content: '>' }", "<p id=target>x</p>", Cascade.Pseudo.BEFORE).orElseThrow();
+
+        assertEquals("'>'", style.value("content"));
+    }
+
+    @Test
+    void anAfterRuleDoesNotGiveTheElementABeforeStyle() {
+        assertTrue(pseudoOfTarget(
+                "#target::after { content: '<' }", "<p id=target>x</p>", Cascade.Pseudo.BEFORE).isEmpty());
+    }
+
+    @Test
+    void anElementWithNoPseudoRuleHasNoPseudoStyle() {
+        assertTrue(pseudoOfTarget(
+                "#target { color: red }", "<p id=target>x</p>", Cascade.Pseudo.AFTER).isEmpty());
+    }
+
+    @Test
+    void theLegacySingleColonFormIsAcceptedToo() {
+        assertTrue(pseudoOfTarget(
+                "#target:before { content: '>' }", "<p id=target>x</p>", Cascade.Pseudo.BEFORE).isPresent());
+    }
+
+    @Test
+    void aPseudoElementInheritsFromTheElementItHangsOff() {
+        ComputedStyle style = pseudoOfTarget(
+                "#target { letter-spacing: 3pt } #target::before { content: '>' }",
+                "<p id=target>x</p>",
+                Cascade.Pseudo.BEFORE).orElseThrow();
+
+        assertEquals("3pt", style.value("letter-spacing"));
+    }
+
+    @Test
+    void thePseudoPartOfASelectorIsStrippedBeforeTheElementPartIsMatched() {
+        // The matcher is jsoup, which knows nothing about ::before, so the
+        // element part has to be matched on its own.
+        assertTrue(pseudoOfTarget(
+                ".outer p::before { content: '>' }",
+                "<div class=outer><p id=target>x</p></div>",
+                Cascade.Pseudo.BEFORE).isPresent());
+    }
 }

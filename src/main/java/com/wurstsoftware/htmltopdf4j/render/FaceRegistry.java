@@ -38,6 +38,7 @@ public final class FaceRegistry {
             List.of("dejavu sans", "noto sans", "freeserif", "noto sans symbols", "symbola", "noto color emoji");
 
     private final List<FaceChain> chains = new ArrayList<>();
+    private final List<Boolean> syntheticBold = new ArrayList<>();
     private final Map<String, Integer> byRequest = new HashMap<>();
     private final Map<String, EmbeddedFace> declaredFaces = new LinkedHashMap<>();
     private final Face defaultFace;
@@ -45,7 +46,11 @@ public final class FaceRegistry {
     public FaceRegistry(FaceSource defaultSource) {
         this.defaultFace = load(defaultSource);
         chains.add(chainFor(defaultFace));
-        byRequest.put("", 0);
+        syntheticBold.add(false);
+        // The commonest style of all — no font-family, upright, regular — is
+        // the default chain, so it must hash to it rather than resolve to an
+        // identical second chain and embed the same font twice.
+        byRequest.put(requestKey(List.of(), false, false), 0);
     }
 
     /** The Face chain index a run of text with this style should be shaped with. */
@@ -53,16 +58,32 @@ public final class FaceRegistry {
         List<String> families = style.fontFamily();
         boolean bold = style.bold();
         boolean italic = style.italic();
-        String request = String.join(",", families).toLowerCase(Locale.ROOT) + "|" + bold + "|" + italic;
+        String request = requestKey(families, bold, italic);
 
         Integer existing = byRequest.get(request);
         if (existing != null) {
             return existing;
         }
         int index = chains.size();
-        chains.add(chainFor(resolve(families, bold, italic)));
+        Face resolved = resolve(families, bold, italic);
+        chains.add(chainFor(resolved));
+        // Emboldening a Face that is already bold draws it twice as heavy, so
+        // the writer is only asked to fake it when the family had nothing.
+        syntheticBold.add(bold && !resolved.bold());
         byRequest.put(request, index);
         return index;
+    }
+
+    private static String requestKey(List<String> families, boolean bold, boolean italic) {
+        return String.join(",", families).toLowerCase(Locale.ROOT) + "|" + bold + "|" + italic;
+    }
+
+    /**
+     * Whether text drawn with this chain has to be emboldened by the writer,
+     * because the family offered no real bold Face.
+     */
+    public boolean syntheticBold(int index) {
+        return syntheticBold.get(index);
     }
 
     public FaceChain chain(int index) {

@@ -270,8 +270,14 @@ public final class ComputedStyle {
      * {@code --a: var(--b)} and {@code --b: var(--a)} is legal CSS to write.
      */
     private String substituteVariables(String value, int depth) {
-        if (value == null || depth > MAX_VARIABLE_DEPTH || !value.contains("var(")) {
+        if (value == null || !value.contains("var(")) {
             return value;
+        }
+        if (depth > MAX_VARIABLE_DEPTH) {
+            // Only a cycle gets this deep. Returning the half-substituted text
+            // would leak a literal `var(--b)` into a computed value; CSS says
+            // the declaration is invalid at computed-value time instead.
+            return null;
         }
         StringBuilder resolved = new StringBuilder(value.length());
         int i = 0;

@@ -54,6 +54,7 @@ public final class EmbeddedFace implements Face {
     private final Font shaped;
     private final int unitsPerEm;
     private final int glyphCount;
+    private final boolean bold;
     private final int[] advanceWidths;
     private final int ascender;
     private final int descender;
@@ -73,6 +74,9 @@ public final class EmbeddedFace implements Face {
                         TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON));
         this.unitsPerEm = metrics.getUnitsPerEm();
         this.glyphCount = metrics.getNumberOfGlyphs();
+        // `head.macStyle` bit 0 is the font program's own claim to be bold,
+        // which is what decides whether the writer has to fake it.
+        this.bold = (metrics.getHeader().getMacStyle() & 1) != 0;
 
         HorizontalMetricsTable hmtx = metrics.getHorizontalMetrics();
         this.advanceWidths = new int[glyphCount];
@@ -154,6 +158,11 @@ public final class EmbeddedFace implements Face {
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read font tables of " + name, e);
         }
+    }
+
+    @Override
+    public boolean bold() {
+        return bold;
     }
 
     /** The font program, for embedding or subsetting. */

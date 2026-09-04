@@ -19,6 +19,13 @@ public sealed interface Face permits EmbeddedFace, Standard14Face {
     /** The family this Face belongs to, for {@code font-family} matching. */
     String family();
 
+    /**
+     * Whether the font program itself is bold, as opposed to a regular Face
+     * standing in for one. A Face that is not really bold has to be emboldened
+     * by the writer; one that is must not be, or it comes out twice as heavy.
+     */
+    boolean bold();
+
     /** The width of {@code text} at {@code size} points. */
     float measure(String text, float size);
 

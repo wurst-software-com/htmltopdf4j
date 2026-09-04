@@ -800,7 +800,8 @@ public final class Layout {
         float size = fragment.size();
         page().add(new PaintCommand.SetFillColor(style.color()));
         page().add(new PaintCommand.Text(
-                fragment.text(), x, pdfY(baseline), size, fragment.face(), style.bold(),
+                fragment.text(), x, pdfY(baseline), size, fragment.face(),
+                faces.syntheticBold(fragment.face()),
                 style.length("letter-spacing").map(length -> style.resolve(length, 0f)).orElse(0f)));
 
         if (style.underline()) {
