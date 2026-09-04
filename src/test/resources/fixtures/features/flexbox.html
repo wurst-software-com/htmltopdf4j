@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { margin: 28.8pt; }
+  body { font-size: 11pt; }
+  .row { display: flex; gap: 12pt; margin-bottom: 14pt; }
+  .card { background-color: #eef; padding: 8pt; border: 1px solid #99c; }
+  .g1 { flex: 1; }
+  .fixed { display: flex; gap: 8pt; margin-bottom: 14pt; }
+  .w120 { flex: 0 0 120pt; background-color: #ffe08a; padding: 6pt; }
+  .grow { flex: 1; background-color: #8fe; padding: 6pt; }
+  .end { display: flex; justify-content: flex-end; gap: 8pt; }
+  .chip { background-color: #dde; padding: 4pt 8pt; }
+</style>
+</head>
+<body>
+  <h1>Flexbox</h1>
+
+  <h2>Equal columns (flex: 1)</h2>
+  <div class="row">
+    <div class="card g1">Column A</div>
+    <div class="card g1">Column B</div>
+    <div class="card g1">Column C</div>
+  </div>
+
+  <h2>Fixed basis + grow</h2>
+  <div class="fixed">
+    <div class="w120">Fixed 120pt</div>
+    <div class="grow">Grows to fill the remaining space beside the fixed column.</div>
+  </div>
+
+  <h2>justify-content: flex-end</h2>
+  <div class="end">
+    <div class="chip">One</div>
+    <div class="chip">Two</div>
+  </div>
+
+  <h2>align-items: center</h2>
+  <div style="display:flex; align-items:center; gap:10pt; margin-top:10pt">
+    <div class="card" style="flex:0 0 140pt">A tall item with enough wrapped
+      text to be clearly taller than its row siblings.</div>
+    <div class="card">Centered</div>
+  </div>
+
+  <h2>Inline (span) flex items, space-between</h2>
+  <div style="display:flex; justify-content:space-between; margin-top:10pt">
+    <span class="chip">Left</span>
+    <span class="chip">Middle</span>
+    <span class="chip">Right</span>
+  </div>
+
+  <h2>flex-direction: column, gap</h2>
+  <div style="display:flex; flex-direction:column; gap:8pt; margin-top:10pt">
+    <div class="card">Column one</div>
+    <div class="card">Column two</div>
+  </div>
+</body>
+</html>

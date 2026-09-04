@@ -1,0 +1,246 @@
+package com.wurstsoftware.htmltopdf4j.style;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Selector;
+
+/**
+ * The resolution of every CSS declaration that could apply to an element down to
+ * one computed value per property.
+ *
+ * <p>Selector matching is jsoup's: it already implements type, class, id,
+ * universal, attribute, descendant, child, sibling and the structural
+ * pseudo-classes against the very DOM being rendered, and reimplementing that
+ * would be a second matcher to keep correct. What is not jsoup's, and is done
+ * here, is the cascade itself — origin, {@code !important}, specificity and
+ * source order — and inheritance.
+ *
+ * <p>Rules are matched once each, against the whole Document, rather than every
+ * rule being tested against every element. A stylesheet has far fewer rules than
+ * a Document has elements.
+ */
+public final class Cascade {
+
+    /**
+     * Cascade origins in ascending precedence. {@code !important} inverts the
+     * order of the origins, which is why author-important sits above
+     * author-normal but below UA-important: it exists so a UA can guarantee
+     * things an author cannot override.
+     */
+    private enum Level {
+        UA_NORMAL,
+        AUTHOR_NORMAL,
+        AUTHOR_IMPORTANT,
+        UA_IMPORTANT
+    }
+
+    private static final Stylesheet USER_AGENT = loadUserAgentStylesheet();
+
+    private final Map<Element, ComputedStyle> styles = new IdentityHashMap<>();
+    private final Stylesheet authorStyles;
+
+    private Cascade(Stylesheet authorStyles) {
+        this.authorStyles = authorStyles;
+    }
+
+    /**
+     * Cascades {@code stylesheet} over {@code document} and computes a style for
+     * every element.
+     */
+    public static Cascade apply(Document document, Stylesheet stylesheet) {
+        Cascade cascade = new Cascade(stylesheet);
+        Map<Element, Map<String, Winner>> declared = new IdentityHashMap<>();
+
+        collect(document, USER_AGENT, Level.UA_NORMAL, Level.UA_IMPORTANT, declared);
+        collect(document, stylesheet, Level.AUTHOR_NORMAL, Level.AUTHOR_IMPORTANT, declared);
+        collectInlineStyles(document, declared);
+
+        cascade.compute(document, declared);
+        return cascade;
+    }
+
+    /** The computed style of an element; the initial style for one never cascaded. */
+    public ComputedStyle styleOf(Element element) {
+        return styles.getOrDefault(element, ComputedStyle.initial());
+    }
+
+    public Stylesheet stylesheet() {
+        return authorStyles;
+    }
+
+    /** The declaration currently winning one property on one element. */
+    private record Winner(Level level, Specificity specificity, int order, String value) {
+
+        boolean losesTo(Level level, Specificity specificity, int order) {
+            int byLevel = this.level.compareTo(level);
+            if (byLevel != 0) {
+                return byLevel < 0;
+            }
+            int bySpecificity = this.specificity.compareTo(specificity);
+            // Equal specificity: the later rule wins, which is what source order means.
+            return bySpecificity != 0 ? bySpecificity < 0 : this.order <= order;
+        }
+    }
+
+    private static void collect(
+            Document document,
+            Stylesheet stylesheet,
+            Level normal,
+            Level important,
+            Map<Element, Map<String, Winner>> declared) {
+
+        for (StyleRule rule : stylesheet.rules()) {
+            List<Element> matches = match(document, rule.selector());
+            if (matches.isEmpty()) {
+                continue;
+            }
+            for (Declaration declaration : rule.declarations()) {
+                Level level = declaration.important() ? important : normal;
+                for (Map.Entry<String, String> longhand :
+                        Shorthands.expand(declaration.property(), declaration.value()).entrySet()) {
+                    for (Element element : matches) {
+                        offer(declared, element, longhand.getKey(), longhand.getValue(),
+                                level, rule.specificity(), rule.order());
+                    }
+                }
+            }
+        }
+    }
+
+    private static void collectInlineStyles(Document document, Map<Element, Map<String, Winner>> declared) {
+        for (Element element : document.getAllElements()) {
+            String style = element.attr("style");
+            if (style.isBlank()) {
+                continue;
+            }
+            for (Declaration declaration : Stylesheet.parseInline(style)) {
+                Level level = declaration.important() ? Level.AUTHOR_IMPORTANT : Level.AUTHOR_NORMAL;
+                for (Map.Entry<String, String> longhand :
+                        Shorthands.expand(declaration.property(), declaration.value()).entrySet()) {
+                    offer(declared, element, longhand.getKey(), longhand.getValue(),
+                            level, Specificity.INLINE, Integer.MAX_VALUE);
+                }
+            }
+        }
+    }
+
+    private static void offer(
+            Map<Element, Map<String, Winner>> declared,
+            Element element,
+            String property,
+            String value,
+            Level level,
+            Specificity specificity,
+            int order) {
+
+        Map<String, Winner> forElement = declared.computeIfAbsent(element, key -> new HashMap<>());
+        Winner current = forElement.get(property);
+        if (current == null || current.losesTo(level, specificity, order)) {
+            forElement.put(property, new Winner(level, specificity, order, value));
+        }
+    }
+
+    /**
+     * A selector jsoup cannot parse matches nothing rather than failing the
+     * render — the same thing a browser does with a selector it does not know.
+     */
+    private static List<Element> match(Document document, String selector) {
+        try {
+            return document.select(selector);
+        } catch (Selector.SelectorParseException | IllegalArgumentException e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * Walks the tree top-down so each element's style can inherit from a parent
+     * that is already computed — which font size, and therefore every
+     * {@code em} beneath it, depends on.
+     */
+    private void compute(Document document, Map<Element, Map<String, Winner>> declared) {
+        Element root = document.root();
+        float rootFontSize = rootFontSize(document, declared);
+        computeSubtree(root, null, declared, rootFontSize);
+    }
+
+    private void computeSubtree(
+            Element element,
+            ComputedStyle parent,
+            Map<Element, Map<String, Winner>> declared,
+            float rootFontSize) {
+
+        ComputedStyle style = new ComputedStyle(valuesOf(element, declared), parent, rootFontSize);
+        styles.put(element, style);
+        for (Element child : element.children()) {
+            computeSubtree(child, style, declared, rootFontSize);
+        }
+    }
+
+    /**
+     * The {@code rem} basis: the {@code <html>} element's font size. It is
+     * computed on its own first, because every other element's {@code rem}
+     * lengths resolve against it.
+     */
+    private static float rootFontSize(Document document, Map<Element, Map<String, Winner>> declared) {
+        Element html = document.selectFirst("html");
+        if (html == null) {
+            return ComputedStyle.INITIAL_FONT_SIZE;
+        }
+        return new ComputedStyle(valuesOf(html, declared), null, ComputedStyle.INITIAL_FONT_SIZE).fontSize();
+    }
+
+    private static Map<String, String> valuesOf(Element element, Map<Element, Map<String, Winner>> declared) {
+        Map<String, Winner> winners = declared.get(element);
+        if (winners == null) {
+            return Map.of();
+        }
+        Map<String, String> values = new HashMap<>(winners.size());
+        winners.forEach((property, winner) -> values.put(property, winner.value()));
+        return values;
+    }
+
+    private static Stylesheet loadUserAgentStylesheet() {
+        try (InputStream stream = Cascade.class.getResourceAsStream("ua.css")) {
+            if (stream == null) {
+                throw new IllegalStateException("the user-agent stylesheet is missing from the jar");
+            }
+            return Stylesheet.parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8), 0);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read the user-agent stylesheet", e);
+        }
+    }
+
+    /** Every {@code <style>} block in the Document, in source order. */
+    public static Stylesheet authorStylesheet(Document document) {
+        StringBuilder css = new StringBuilder();
+        for (Element style : document.select("style")) {
+            String media = style.attr("media");
+            if (!media.isBlank() && !appliesToPrint(media)) {
+                continue;
+            }
+            css.append(style.data()).append('\n');
+        }
+        // Numbering starts past the user-agent rules so an author rule of equal
+        // specificity always sorts later than a UA one.
+        return css.isEmpty() ? Stylesheet.EMPTY : Stylesheet.parse(css.toString(), 1_000_000);
+    }
+
+    private static boolean appliesToPrint(String media) {
+        String value = media.toLowerCase(java.util.Locale.ROOT);
+        return value.contains("print") || value.contains("all");
+    }
+
+    /** Every element in the Document, in document order. */
+    public List<Element> elements() {
+        return new ArrayList<>(styles.keySet());
+    }
+}
