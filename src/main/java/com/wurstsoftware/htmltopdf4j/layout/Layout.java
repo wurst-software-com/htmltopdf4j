@@ -508,6 +508,13 @@ public final class Layout {
                 .orElseGet(() -> Math.min(available, intrinsicWidth(block, available)));
         outerWidth = Math.clamp(outerWidth, 1f, Math.max(1f, available));
 
+        // A float is placed whole, so it is measured before anything is laid
+        // out: that is what keeps the Page it started on and the Page it ends
+        // on the same one, and the band and the cursor below honest.
+        float boxHeight = intrinsicHeight(
+                block, Math.max(1f, outerWidth - border.horizontal() - padding.horizontal()));
+        ensureWhole(boxHeight);
+
         float top = y;
         float boxLeft = toLeft
                 ? floats.leftEdge(pageIndex, top, 1f, left) + margin.left()
@@ -522,13 +529,42 @@ public final class Layout {
                 Math.max(1f, outerWidth - border.horizontal() - padding.horizontal()));
         y += padding.bottom() + border.bottom();
 
-        float bottom = Math.max(y, top + style.length("height")
-                .map(height -> style.resolve(height, contentBottom - contentTop))
-                .orElse(0f));
+        int endPage = pageIndex;
+        float bottom = Math.max(y, top + boxHeight);
+        // The band is the box's whole extent, but the box is painted only
+        // inside the content area: a Page it merely overflows into is not a
+        // Page it was laid out on, and has no room reserved for it.
+        y = Math.min(bottom, contentBottom);
         paintBoxDecoration(block, startPage, top, startMark, boxLeft, outerWidth, border, padding);
-        floats.add(startPage, top, bottom + margin.bottom(),
+        addBands(startPage, endPage, top, bottom + margin.bottom(),
                 toLeft ? boxLeft + outerWidth + margin.right() : boxLeft - margin.left(), toLeft);
+        // The flow the float was taken out of carries on where it was, on the
+        // Page it was on, however many Pages the float itself reached.
+        pageIndex = startPage;
         y = top;
+    }
+
+    /**
+     * Reserves the float's exclusion on every Page its box crosses.
+     *
+     * <p>A float too tall for a Page of its own cannot be moved out of the way,
+     * so it is divided; each of the Pages it reaches then has to narrow the
+     * lines beside it, not only the Page it started on.
+     */
+    private void addBands(int startPage, int endPage, float top, float bottom, float edge, boolean toLeft) {
+        for (int page = startPage; page < endPage; page++) {
+            floats.add(page, page == startPage ? top : contentTop, contentBottom, edge, toLeft);
+        }
+        int page = endPage;
+        float bandTop = endPage == startPage ? top : contentTop;
+        float bandBottom = bottom;
+        while (bandBottom > contentBottom) {
+            floats.add(page, bandTop, contentBottom, edge, toLeft);
+            bandBottom = contentTop + (bandBottom - contentBottom);
+            bandTop = contentTop;
+            page++;
+        }
+        floats.add(page, bandTop, bandBottom, edge, toLeft);
     }
 
     /**
@@ -1069,12 +1105,14 @@ public final class Layout {
     /** How tall an inline-block's content comes out at a known width. */
     private float intrinsicHeight(BlockBox block, float width) {
         ComputedStyle style = block.style();
-        Optional<Float> declared = style.length("height").map(length -> style.resolve(length, 0f));
         Edges padding = Edges.padding(style, width);
         Edges border = Edges.borderWidths(style);
         float edges = padding.vertical() + border.vertical();
-        if (declared.isPresent()) {
-            return declared.get() + (style.keyword("box-sizing", "border-box") ? 0f : edges);
+        // A declared height is a minimum, the same way it is in the block flow:
+        // content that overruns it makes the box taller rather than spilling.
+        float declared = Math.max(lengthOf(style, "height"), lengthOf(style, "min-height"));
+        if (declared > 0f && !style.keyword("box-sizing", "border-box")) {
+            declared += edges;
         }
         float height = 0f;
         for (BoxChild child : block.children()) {
@@ -1090,7 +1128,14 @@ public final class Layout {
                 case TableBox table -> TableLayout.measure(this, table, width);
             };
         }
-        return height + edges;
+        return Math.max(declared, height + edges);
+    }
+
+    /** A vertical length in points, or zero when it is not declared. */
+    private float lengthOf(ComputedStyle style, String property) {
+        return style.length(property)
+                .map(length -> style.resolve(length, contentBottom - contentTop))
+                .orElse(0f);
     }
 
     // --- Access for the table layout ----------------------------------------

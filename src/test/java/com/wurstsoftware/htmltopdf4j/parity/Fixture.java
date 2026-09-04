@@ -11,9 +11,10 @@ import java.util.List;
  * matrix.
  *
  * <p>The list below is the corpus. All of it but {@code features/break-inside}
- * is ported verbatim; that one is this port's own, because the reference engine
- * implements no break properties and so has no Expectation to port. Adding a
- * Fixture means
+ * and {@code features/float-break} is ported verbatim; those two are this
+ * port's own, because the reference engine implements no break properties and
+ * paginates a float wrongly, so neither has an Expectation worth porting.
+ * Adding a Fixture means
  * dropping the HTML into {@code src/test/resources/fixtures/<layer>/}, adding
  * its Expectation, and naming it here.
  */
@@ -58,6 +59,7 @@ public record Fixture(String layer, String name) {
             new Fixture("features", "inline-images"),
             new Fixture("features", "rich-cells"),
             new Fixture("features", "break-inside"),
+            new Fixture("features", "float-break"),
             new Fixture("combined", "invoice"),
             new Fixture("edge-cases", "unicode"),
             new Fixture("edge-cases", "long-table"),

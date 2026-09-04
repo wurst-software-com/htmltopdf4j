@@ -1,0 +1,17 @@
+{
+  "fixture": "float-break",
+  "layer": "features",
+  "description": "A float that will not fit in what is left of a page moves to the next one whole, and the band it excludes moves with it, so the paragraph after it wraps beside it there. Port-authored: the reference engine files the band against the page the float started on, so there is no reference behaviour worth porting.",
+  "pdf_assertions": {
+    "must_contain_operators": ["BT", "ET", "re"],
+    "must_contain_text": ["Asidefirst", "Besidefirst", "Besidelast"],
+    "min_size_bytes": 700,
+    "max_size_bytes": 2000000,
+    "min_pages": 2
+  },
+  "visual_assertions": [
+    "The filler fills most of page 1; the aside does not start on it.",
+    "The aside is drawn whole at the top right of page 2, inside the page margins.",
+    "The paragraph starts at the top left of page 2 and its first lines are narrowed to the left of the aside."
+  ]
+}

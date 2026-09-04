@@ -15,5 +15,12 @@ broke tables nested in grid items, table cells and inline-blocks. It still knows
 nothing about floats, so an Unbreakable box whose height is driven by a float
 measures short and breaks anyway. That fails open — you get the old behaviour,
 not a corrupted Page — and it waits on the float pagination bug (#19), which
-wants exactly the rollback machinery this decision declines to build. If #19 is
-fixed that way, this decision is worth revisiting.
+looked as though it wanted exactly the rollback machinery this decision declines
+to build.
+
+It did not. #19 was fixed by measuring the float and calling `ensureWhole`
+before laying it out, the same shape as this decision: once a float is placed
+whole, the Page it starts on and the Page it ends on are the same Page, and
+both symptoms — a band filed against the wrong Page, a cursor restored to a
+stale y — stop being reachable rather than being handled. This decision stands,
+and the Display list still has no way to move a Paint command it has emitted.
