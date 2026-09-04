@@ -100,6 +100,19 @@ public final class LineBreaker {
         return wrapper.finish();
     }
 
+    /**
+     * How much wider than the line a word may measure and still be treated as
+     * fitting.
+     *
+     * <p>A box sized to its own content — a flex item, a shrink-to-fit float —
+     * measures its text, adds its padding, and hands the sum back as a width;
+     * the width the text is then wrapped at is that sum minus the padding
+     * again. In float arithmetic that round trip can land a hair below where it
+     * started, and without this tolerance a box sized exactly to its content
+     * wraps its own last character onto a second line.
+     */
+    private static final float FIT_TOLERANCE = 0.01f;
+
     /** The state of a wrap in progress: the lines done, and the line being filled. */
     private final class Wrapper {
         private final List<VisualLine> lines = new ArrayList<>();
@@ -141,14 +154,14 @@ public final class LineBreaker {
 
             for (String word : splitIntoWords(run.text())) {
                 float wordWidth = advance(chain, word, size, spacing);
-                if (wraps && x + wordWidth > available + 0.01f && !current.isEmpty() && !word.isBlank()) {
+                if (wraps && x + wordWidth > available + FIT_TOLERANCE && !current.isEmpty() && !word.isBlank()) {
                     newLine();
                 }
                 if (x == 0f && word.isBlank()) {
                     // A space that fell to the start of a line is not drawn.
                     continue;
                 }
-                if (wraps && wordWidth > available && x == 0f) {
+                if (wraps && wordWidth > available + FIT_TOLERANCE && x == 0f) {
                     breakWithinWord(word, run, face, chain, size, spacing);
                     continue;
                 }

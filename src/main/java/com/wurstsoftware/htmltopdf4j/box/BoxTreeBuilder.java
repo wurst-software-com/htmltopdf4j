@@ -100,7 +100,46 @@ public final class BoxTreeBuilder {
     private List<BoxChild> childrenOf(Element element, String link) {
         Content content = new Content();
         appendChildren(element, content, link);
-        return content.finish();
+        List<BoxChild> children = content.finish();
+        return blockifies(cascade.styleOf(element)) ? blockify(children, cascade.styleOf(element)) : children;
+    }
+
+    /**
+     * Whether an element's children are laid out as items rather than as flow
+     * content — a flex or grid container's are.
+     */
+    private static boolean blockifies(ComputedStyle style) {
+        return switch (style.display()) {
+            case FLEX, INLINE_FLEX, GRID, INLINE_GRID -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Wraps a flex or grid container's inline content in anonymous block boxes.
+     *
+     * <p>A flex container has no inline content: every child, including a bare
+     * {@code <span>} or a run of text, becomes an item. Without this a
+     * {@code <span>} between two flex items would vanish, because the layout only
+     * looks at block children.
+     */
+    private static List<BoxChild> blockify(List<BoxChild> children, ComputedStyle style) {
+        List<BoxChild> items = new ArrayList<>(children.size());
+        for (BoxChild child : children) {
+            items.add(child instanceof LineBox line ? blockifyLine(line, style) : child);
+        }
+        return items;
+    }
+
+    /**
+     * One anonymous item per inline element in the line, so sibling
+     * {@code <span>}s become sibling items rather than one merged item.
+     */
+    private static BoxChild blockifyLine(LineBox line, ComputedStyle style) {
+        if (line.runs().size() == 1 && line.runs().get(0).inlineBlock() != null) {
+            return line.runs().get(0).inlineBlock();
+        }
+        return BlockBox.anonymous(style, List.of(line));
     }
 
     private void appendChildren(Element element, Content content, String link) {
@@ -163,7 +202,15 @@ public final class BoxTreeBuilder {
 
         switch (display) {
             case TABLE -> content.block(tableBox(element, style));
-            case INLINE -> appendChildren(element, content, href);
+            case INLINE -> {
+                if (blockifies(cascade.styleOf(parentOf(element)))) {
+                    // A flex or grid container's inline child is an item in its
+                    // own right, not part of a line.
+                    content.block(blockBox(element, style, href, null));
+                } else {
+                    appendChildren(element, content, href);
+                }
+            }
             case INLINE_BLOCK, INLINE_FLEX, INLINE_GRID ->
                     content.inline(InlineRun.inlineBlock(blockBox(element, style, href, null), style, href));
             default -> content.block(blockBox(element, style, href, markerOf(element, style)));
@@ -173,6 +220,11 @@ public final class BoxTreeBuilder {
     private BlockBox blockBox(Element element, ComputedStyle style, String link, String marker) {
         return new BlockBox(style, element.normalName(), marker, anchorOf(element),
                 childrenOf(element, link));
+    }
+
+    /** An element's parent element, or itself at the root, so a style is always available. */
+    private static Element parentOf(Element element) {
+        return element.parent() != null ? element.parent() : element;
     }
 
     private static String anchorOf(Element element) {

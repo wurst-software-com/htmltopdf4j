@@ -200,6 +200,17 @@ public final class Layout {
      * what keeps consecutive paragraphs one margin apart instead of two.
      */
     private float layoutBlock(BlockBox block, float left, float width, float previousBottomMargin) {
+        return layoutBlock(block, left, width, previousBottomMargin, null);
+    }
+
+    /**
+     * @param forcedWidth the border-box width to use instead of the one the
+     *     block's own style would give it, or {@code null}. A flex or grid item's
+     *     width is decided by its container, not by itself.
+     */
+    private float layoutBlock(
+            BlockBox block, float left, float width, float previousBottomMargin, Float forcedWidth) {
+
         ComputedStyle style = block.style();
         if (style.display() == Display.NONE) {
             return previousBottomMargin;
@@ -211,7 +222,9 @@ public final class Layout {
 
         y += Math.max(previousBottomMargin, margin.top());
 
-        float outerWidth = usedWidth(style, width, margin, padding, border);
+        float outerWidth = forcedWidth != null
+                ? Math.max(1f, forcedWidth)
+                : usedWidth(style, width, margin, padding, border);
         float boxLeft = left + margin.left() + indent(style, width, outerWidth, margin);
         float contentX = boxLeft + border.left() + padding.left();
         float innerWidth = Math.max(1f, outerWidth - border.horizontal() - padding.horizontal());
@@ -227,6 +240,18 @@ public final class Layout {
         int startMark = page().mark();
 
         anchor(block);
+        if (style.display() == Display.FLEX || style.display() == Display.INLINE_FLEX
+                || style.display() == Display.GRID || style.display() == Display.INLINE_GRID) {
+            y += border.top() + padding.top();
+            if (style.display() == Display.FLEX || style.display() == Display.INLINE_FLEX) {
+                FlexLayout.layout(this, block, contentX, innerWidth);
+            } else {
+                GridLayout.layout(this, block, contentX, innerWidth);
+            }
+            y += padding.bottom() + border.bottom();
+            paintBoxDecoration(block, startPage, startY, startMark, boxLeft, outerWidth, border, padding);
+            return margin.bottom();
+        }
         float clipHeight = clippedHeight(style, border, padding);
         if (clipHeight > 0f) {
             page().add(new PaintCommand.PushClipRect(
@@ -802,6 +827,11 @@ public final class Layout {
 
     void flowChildren(List<BoxChild> children, float left, float width) {
         layoutChildren(children, left, width);
+    }
+
+    /** Lays one block out at a width its container decided, as a flex or grid item does. */
+    void flowItem(BlockBox item, float left, float containingWidth, Float itemWidth) {
+        layoutBlock(item, left, containingWidth, 0f, itemWidth);
     }
 
     float measureChildren(BlockBox block, float width) {
