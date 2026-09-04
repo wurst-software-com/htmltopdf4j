@@ -1,22 +1,22 @@
 {
   "fixture": "font-face",
   "layer": "features",
-  "description": "@font-face: family declared by the author, src chain with an unsupported woff2 candidate skipped and a local() fallback loaded; a second rule supplies the real bold face. Assertions use embedded face names: glyph ids in the content streams are not searchable as text.",
+  "description": "@font-face: a family declared by the author, with an src chain whose unsupported woff2 candidate is skipped and whose next candidate is loaded, and a second rule supplying the real bold face. The faces are carried by the corpus, so the Fixture asserts the same thing on any machine; the local() form of src is covered by the unit tests instead. Assertions use embedded face names: glyph ids in the content streams are not searchable as text.",
   "pdf_assertions": {
     "must_contain_operators": [
       "BT",
       "ET",
       "TJ",
-      "ArialMT",
-      "Arial-BoldMT"
+      "DejaVuSerif",
+      "DejaVuSerif-Bold"
     ],
     "min_size_bytes": 900,
     "max_size_bytes": 3000000,
     "min_pages": 1
   },
   "visual_assertions": [
-    "Heading and body render in Arial (via the @font-face local() fallback), not Helvetica.",
-    "The bold span uses the real Arial Bold face from the second @font-face rule, not synthesized strokes.",
+    "Heading and body render in the declared serif face, not Helvetica.",
+    "The bold span uses the real bold face from the second @font-face rule, not synthesized strokes.",
     "The last paragraph (undeclared family) falls back to the document font."
   ]
 }

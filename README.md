@@ -98,7 +98,7 @@ Expectation files.
 ## Building
 
 ```
-mvn test        # 563 tests, including 47 Fixtures against their Expectations
+mvn test        # 564 tests, including 47 Fixtures against their Expectations
 ```
 
 Java 21 is required to build and to run.
@@ -112,15 +112,18 @@ listed Fixture as skipped rather than failed — is empty.
 The mechanism stays because it can only shrink: a listed Fixture that *passes*
 fails the build.
 
-Two Fixtures do depend on the machine's fonts. `features/font-family` and
-`features/font-face` assert that Georgia, Arial and Courier New appear in the
-PDF's font objects, and this engine will not invent a `BaseFont` name for a Face
-it does not have, so a machine without those families will see them fail.
+It is empty by construction: no Fixture reads a font from outside the
+repository. The two that assert on face names declare their families with
+`@font-face` against four DejaVu faces the corpus carries, under the Bitstream
+Vera licence in `src/test/resources/fixtures/features/fonts/`. See
+[ADR 0006](docs/adr/0006-carry-the-fonts-the-fixtures-need.md), which also
+records what that costs: resolving a family against a font the *host* has
+installed is covered by unit tests that skip, not by a Fixture.
 
 ## Design notes
 
 - [CONTEXT.md](CONTEXT.md) — the domain vocabulary this codebase speaks.
-- [docs/adr/](docs/adr/) — the four decisions that shaped the port.
+- [docs/adr/](docs/adr/) — the decisions that shaped the port.
 - [docs/coverage-matrix.md](docs/coverage-matrix.md) — what renders, and how well.
 - [docs/reference-tests.md](docs/reference-tests.md) — every one of the Rust
   engine's 219 unit tests, and whether it was ported or dropped.

@@ -186,9 +186,16 @@ The known-failures ledger (`src/test/resources/parity-known-failures.txt`) is
 it can only shrink — a listed Fixture that starts passing fails the build — but
 it currently lists nothing.
 
-Two Fixtures do depend on the machine's fonts. `features/font-family` and
-`features/font-face` assert that Georgia, Arial and Courier New appear in the
-PDF's font objects, and this engine will not invent a `BaseFont` name for a Face
-it does not have, so they need those families installed. The rest of the suite
+It is empty **by construction**, not by installation: no Fixture reads a font
+from outside the repository. The two that assert on face names —
+`features/font-family` and `features/font-face` — declare their families with
+`@font-face` against four DejaVu faces the corpus carries, so they assert the
+same thing on a bare container as they do here; see
+[ADR 0006](adr/0006-carry-the-fonts-the-fixtures-need.md). The rest of the suite
 needs no particular font: where a test needs a real font program it takes
 whatever is installed, and skips when there is nothing at all.
+
+What that costs is coverage of one path: resolving a family against a font the
+*host* has installed, and the `local()` form of an `@font-face` `src`, are
+covered by unit tests that skip on a host without the font, rather than by a
+Fixture.

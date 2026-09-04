@@ -1,26 +1,25 @@
 {
   "fixture": "font-family",
   "layer": "features",
-  "description": "Per-element font-family (named, generic monospace/sans-serif) with real bold/italic faces; pre/code UA monospace. Assertions use embedded face names: glyph ids in the content streams are not searchable as text.",
+  "description": "Per-element font-family with real bold and italic faces, and the UA monospace of pre/code/kbd. The families are declared against faces the corpus carries, so the Fixture asserts the same thing on any machine; resolving a family against a font installed on the host is covered by the unit tests instead, which skip when the host has not got it. Assertions use embedded face names: glyph ids in the content streams are not searchable as text.",
   "pdf_assertions": {
     "must_contain_operators": [
       "BT",
       "ET",
       "TJ",
-      "Georgia",
-      "Georgia-Bold",
-      "Georgia-Italic",
-      "Arial",
-      "Courier"
+      "DejaVuSerif",
+      "DejaVuSerif-Bold",
+      "DejaVuSansMono",
+      "DejaVuSansMono-Oblique"
     ],
     "min_size_bytes": 900,
     "max_size_bytes": 3000000,
     "min_pages": 1
   },
   "visual_assertions": [
-    "The body renders in Georgia (serif) while the h1 is sans-serif.",
-    "Bold and italic words use real bold/italic faces, not synthesized strokes.",
+    "The body renders in a serif face while the h1 is sans-serif.",
+    "Bold and italic words use real bold and oblique faces, not synthesized strokes.",
     "code, kbd, and pre content renders in a monospace face.",
-    "The courier table cell uses Courier New."
+    "The first table cell is monospace and the second is bold."
   ]
 }

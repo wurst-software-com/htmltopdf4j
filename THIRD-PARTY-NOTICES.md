@@ -77,8 +77,18 @@ shaded and redistributes none of their code; each remains under its own licence.
 
 ## Fonts
 
-No font files are redistributed. The engine reads fonts installed on the
+No font file is in the published jar. The engine reads fonts installed on the
 rendering host and embeds subsets of them into the PDFs it produces; whether a
 given font may be embedded is governed by that font's own licence, which is the
-caller's responsibility. The two Fixtures that depend on host-installed fonts
-are named in the README and tracked in #26.
+caller's responsibility.
+
+The *test corpus* does carry four faces, in
+`src/test/resources/fixtures/features/fonts/`, so that no Fixture depends on a
+font installed on the machine running the build:
+
+| Font | Licence |
+| --- | --- |
+| DejaVu Serif, DejaVu Serif Bold, DejaVu Sans Mono, DejaVu Sans Mono Oblique — unmodified | Bitstream Vera, in `LICENSE.txt` beside them |
+
+Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. Bitstream Vera is a
+trademark of Bitstream, Inc. DejaVu changes are in the public domain.

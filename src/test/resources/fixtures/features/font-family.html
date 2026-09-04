@@ -1,15 +1,20 @@
 <html><head><style>
-  body { font-family: Georgia; font-size: 12pt; }
+  @font-face { font-family: FixtureSerif; src: url(fonts/DejaVuSerif.ttf); }
+  @font-face { font-family: FixtureSerif; src: url(fonts/DejaVuSerif-Bold.ttf); font-weight: bold; }
+  @font-face { font-family: FixtureMono; src: url(fonts/DejaVuSansMono.ttf); }
+  @font-face { font-family: FixtureMono; src: url(fonts/DejaVuSansMono-Oblique.ttf); font-style: italic; }
+
+  body { font-family: FixtureSerif; font-size: 12pt; }
   h1 { font-family: "Helvetica Neue", sans-serif; }
-  .mono-note { font-family: monospace; font-size: 10pt; }
-  .arial { font-family: Arial; }
+  .mono-note { font-family: FixtureMono; font-size: 10pt; }
+  code, kbd, pre { font-family: FixtureMono; }
 </style></head><body>
 <h1>Sans-serif heading with <b>real bold</b></h1>
-<p>Georgia body text with <b>bold words</b> and <i>italic words</i> and
-<b><i>bold-italic</i></b> in real faces.</p>
-<p class="arial">Arial paragraph: regular, <b>bold</b>, <em>emphasized</em>.</p>
+<p>Serif body text with <b>bold words</b> in a real bold face, beside
+<span class="mono-note"><i>italic mono</i></span> in a real oblique one.</p>
+<p class="mono-note">Monospace paragraph: regular and <i>italic</i>.</p>
 <p>Inline <code>code_span()</code> and a keyboard key <kbd>Ctrl</kbd>.</p>
 <pre>preformatted block
   indented monospace</pre>
-<table><tr><td style="font-family: Courier New">courier cell</td><td><b>bold cell</b></td></tr></table>
+<table><tr><td class="mono-note">mono cell</td><td><b>bold cell</b></td></tr></table>
 </body></html>
