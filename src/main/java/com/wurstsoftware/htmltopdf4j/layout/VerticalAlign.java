@@ -26,6 +26,14 @@ final class VerticalAlign {
      * cross-container baseline table, and starting is what it looks like for the
      * single-line items a paged Document actually carries.
      */
+    /**
+     * Whether a table cell is aligned on the row's baseline, which is what it
+     * does unless it says otherwise.
+     */
+    static boolean isBaseline(String keyword) {
+        return keyword == null || keyword.isBlank() || keyword.trim().equalsIgnoreCase("baseline");
+    }
+
     /** {@code align-self: auto} defers to the container, which is the default. */
     static boolean isAuto(String keyword) {
         return keyword == null || keyword.isBlank() || keyword.trim().equalsIgnoreCase("auto");

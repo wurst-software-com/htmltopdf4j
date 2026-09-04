@@ -4,7 +4,7 @@ What this engine renders, per HTML element and CSS feature: **Full**, **Partial*
 or **None**. "Partial" always says what is missing.
 
 This is the honest state of the port, not a roadmap. It is written against the
-code, and the Parity harness — 46 Fixtures, one JUnit case each — is what keeps
+code, and the Parity harness — 47 Fixtures, one JUnit case each — is what keeps
 it from drifting. Where a row says Full, there is a Fixture or a unit test that
 would fail if it stopped being true.
 
@@ -133,7 +133,7 @@ byte-identical output. Anything outside that is None here and stays None.
 | Grid: `grid-auto-flow`, `grid-auto-rows`, `minmax()` | None | Rows not named by a track are sized to their content |
 | Tables: automatic column widths, `colspan`, `rowspan`, header and footer groups | Full | A rowspan occupancy grid keeps the rows below a spanning cell aligned |
 | Tables: per-side cell borders | Full | A cell declaring only `border-bottom` gets one line under it, through the same per-side stroking blocks use |
-| Tables: `vertical-align` on a cell | Partial | `middle` and `bottom` place the content in the row; `top` is honoured and `baseline`, the initial value, is treated as `top` rather than aligning the cells' first baselines |
+| Tables: `vertical-align` on a cell | Full | `baseline`, the initial value, puts every cell's first line on the row's common baseline — the deepest of them — and `top`, `middle` and `bottom` divide the room the content leaves over. A cell whose content the flow cannot give a baseline to, such as one holding only an image, falls back to the top of the row |
 | Tables: `border-collapse`, `table-layout: fixed` | None | Borders are always separate |
 | Multi-column (`column-count`, `column-width`) | None | |
 
@@ -182,7 +182,7 @@ byte-identical output. Anything outside that is None here and stays None.
 ## Environment dependence
 
 The known-failures ledger (`src/test/resources/parity-known-failures.txt`) is
-**empty**: all 46 Fixtures meet their Expectations. The mechanism stays, because
+**empty**: all 47 Fixtures meet their Expectations. The mechanism stays, because
 it can only shrink — a listed Fixture that starts passing fails the build — but
 it currently lists nothing.
 

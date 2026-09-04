@@ -1,0 +1,17 @@
+{
+  "fixture": "cell-baseline",
+  "layer": "features",
+  "description": "vertical-align: baseline, the initial value of a table cell, puts the first line of every cell in a row on one baseline however different their font sizes are; top and bottom are unaffected. Authored here rather than ported: the reference engine treats a cell's baseline as top, so there is no reference behaviour to port.",
+  "pdf_assertions": {
+    "must_contain_operators": ["BT", "ET", "re", "S"],
+    "must_contain_text": ["Bigbaseline", "Midbaseline", "Smallbaseline", "Bigtop", "Smalltop", "Smallbottom"],
+    "min_size_bytes": 700,
+    "max_size_bytes": 2000000,
+    "min_pages": 1
+  },
+  "visual_assertions": [
+    "In the first row the three words of different sizes sit on one baseline: the smaller text is pushed down, not aligned to the top of its cell.",
+    "In the second row Bigtop and Smalltop both start at the top of the row, so their baselines do not line up.",
+    "Smallbottom sits at the foot of its cell."
+  ]
+}

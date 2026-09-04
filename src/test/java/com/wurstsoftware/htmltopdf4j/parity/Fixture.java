@@ -11,10 +11,8 @@ import java.util.List;
  * matrix.
  *
  * <p>The list below is the corpus. Forty-one of them are ported verbatim; the
- * rest — {@code features/break-inside}, {@code features/float-break},
- * {@code features/inline-decoration}, {@code features/flex-align} and
- * {@code features/grid-stretch} — are this port's own, and each says in its
- * Expectation's description why it had no reference Expectation to port.
+ * rest are this port's own, and each says in its Expectation's description why
+ * it had no reference Expectation to port.
  * Adding a Fixture means
  * dropping the HTML into {@code src/test/resources/fixtures/<layer>/}, adding
  * its Expectation, and naming it here.
@@ -64,6 +62,7 @@ public record Fixture(String layer, String name) {
             new Fixture("features", "inline-decoration"),
             new Fixture("features", "flex-align"),
             new Fixture("features", "grid-stretch"),
+            new Fixture("features", "cell-baseline"),
             new Fixture("combined", "invoice"),
             new Fixture("edge-cases", "unicode"),
             new Fixture("edge-cases", "long-table"),

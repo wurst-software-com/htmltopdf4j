@@ -1355,6 +1355,47 @@ public final class Layout {
         return intrinsicHeight(block, width);
     }
 
+    /**
+     * How far below the top of a box its first text baseline sits, or
+     * {@link Float#NaN} when it has none — which is what a table row needs in
+     * order to put every cell's first line on one baseline.
+     *
+     * <p>Content the flow cannot give a baseline to — an image, a nested table —
+     * is skipped over rather than guessed at, and a box that is nothing but such
+     * content has no baseline at all, so its cell falls back to the top of the
+     * row.
+     */
+    float firstBaseline(List<BoxChild> children, float width) {
+        float above = 0f;
+        for (BoxChild child : children) {
+            switch (child) {
+                case LineBox line -> {
+                    List<LineBreaker.VisualLine> lines =
+                            breaker.breakLines(line.runs(), Math.max(1f, width), 0f);
+                    if (!lines.isEmpty()) {
+                        return above + lines.get(0).leading() / 2f + lines.get(0).ascent();
+                    }
+                }
+                case BlockBox block -> {
+                    Edges margin = Edges.margin(block.style(), width);
+                    Edges padding = Edges.padding(block.style(), width);
+                    Edges border = Edges.borderWidths(block.style());
+                    float inner = Math.max(1f,
+                            width - padding.horizontal() - border.horizontal());
+                    float nested = firstBaseline(block.children(), inner);
+                    if (!Float.isNaN(nested)) {
+                        return above + margin.top() + border.top() + padding.top() + nested;
+                    }
+                    above += intrinsicHeight(block, inner) + margin.vertical();
+                }
+                default -> {
+                    return Float.NaN;
+                }
+            }
+        }
+        return Float.NaN;
+    }
+
     float measureIntrinsicWidth(BlockBox block, float availableWidth) {
         return intrinsicWidth(block, availableWidth);
     }

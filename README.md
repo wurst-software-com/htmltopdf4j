@@ -98,12 +98,12 @@ Expectation files.
 ## Building
 
 ```
-mvn test        # 558 tests, including 46 Fixtures against their Expectations
+mvn test        # 563 tests, including 47 Fixtures against their Expectations
 ```
 
 Java 21 is required to build and to run.
 
-All 46 Fixtures pass — 41 ported from the reference corpus, plus five this
+All 47 Fixtures pass — 41 ported from the reference corpus, plus six this
 port authored itself, each of which says in its Expectation why it had no
 reference Expectation to port.
 
