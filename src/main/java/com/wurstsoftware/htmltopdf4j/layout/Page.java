@@ -33,6 +33,22 @@ public final class Page {
         anchors.add(anchor);
     }
 
+    /**
+     * A position in this Page's command list to come back to.
+     *
+     * <p>A block's background has to be painted before its content but is not
+     * measured until after it, because its height is its content's height. Rather
+     * than laying the content out twice, the painter marks the spot and inserts
+     * the background there once the height is known.
+     */
+    public int mark() {
+        return commands.size();
+    }
+
+    public void insert(int index, List<PaintCommand> inserted) {
+        commands.addAll(index, inserted);
+    }
+
     public List<PaintCommand> commands() {
         return Collections.unmodifiableList(commands);
     }

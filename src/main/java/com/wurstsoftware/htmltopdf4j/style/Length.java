@@ -13,7 +13,7 @@ import java.util.Optional;
 public record Length(float value, Unit unit) {
 
     /** CSS reckons 96 pixels to the inch; PDF reckons 72 points to it. */
-    private static final float POINTS_PER_PIXEL = 72f / 96f;
+    public static final float POINTS_PER_PIXEL = 72f / 96f;
 
     public static final Length ZERO = new Length(0f, Unit.POINT);
 

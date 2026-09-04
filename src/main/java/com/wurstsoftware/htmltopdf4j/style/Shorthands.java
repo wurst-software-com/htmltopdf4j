@@ -14,14 +14,14 @@ import java.util.Map;
  * higher-priority {@code border-color: blue} must keep the width and the style,
  * which only works if both have already become longhands competing per property.
  */
-final class Shorthands {
+public final class Shorthands {
 
     private static final List<String> SIDES = List.of("top", "right", "bottom", "left");
 
     private Shorthands() {}
 
     /** Expands one declaration, returning the longhands it stands for. */
-    static Map<String, String> expand(String property, String value) {
+    public static Map<String, String> expand(String property, String value) {
         Map<String, String> longhands = new LinkedHashMap<>();
         switch (property) {
             case "margin", "padding" -> box(longhands, property, "", value);

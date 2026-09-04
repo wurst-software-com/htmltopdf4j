@@ -35,6 +35,45 @@ public record FaceChain(Face primary, List<Face> fallbacks) {
     public record Segment(int chainIndex, String text) {}
 
     /**
+     * The advance width of {@code text} at {@code size}, measured with whichever
+     * Face in the chain covers each part of it.
+     */
+    public float measure(String text, float size) {
+        List<Segment> segments = segment(text);
+        if (segments == null) {
+            return primary.measure(text, size);
+        }
+        float width = 0f;
+        for (Segment segment : segments) {
+            width += at(segment.chainIndex()).measure(segment.text(), size);
+        }
+        return width;
+    }
+
+    /** The tallest ascent among the Faces that will actually draw {@code text}. */
+    public float ascent(String text, float size) {
+        return extent(text, size, true);
+    }
+
+    /** The deepest descent among the Faces that will actually draw {@code text}. */
+    public float descent(String text, float size) {
+        return extent(text, size, false);
+    }
+
+    private float extent(String text, float size, boolean wantAscent) {
+        List<Segment> segments = segment(text);
+        float extent = wantAscent ? primary.ascent(size) : primary.descent(size);
+        if (segments == null) {
+            return extent;
+        }
+        for (Segment segment : segments) {
+            Face face = at(segment.chainIndex());
+            extent = Math.max(extent, wantAscent ? face.ascent(size) : face.descent(size));
+        }
+        return extent;
+    }
+
+    /**
      * Splits {@code text} into runs by which Face can draw them.
      *
      * <p>Returns {@code null} — meaning "draw it all in the primary" — whenever

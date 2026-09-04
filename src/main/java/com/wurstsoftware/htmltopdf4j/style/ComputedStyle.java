@@ -44,6 +44,15 @@ public final class ComputedStyle {
         this.rtl = computeDirection(parent);
     }
 
+    /**
+     * A style built straight from declarations, with no parent to inherit from.
+     * Used for the things the Cascade does not reach — the {@code @page} rule
+     * above all, which styles a Page rather than an element.
+     */
+    public static ComputedStyle of(Map<String, String> declared) {
+        return new ComputedStyle(declared, null, INITIAL_FONT_SIZE);
+    }
+
     /** The style an element with no declarations at all would compute to. */
     public static ComputedStyle initial() {
         return new ComputedStyle(Map.of(), null, INITIAL_FONT_SIZE);

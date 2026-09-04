@@ -1,0 +1,33 @@
+# Fixtures that do not yet meet their Expectation.
+#
+# A listed Fixture that fails is reported as skipped; a listed Fixture that
+# PASSES fails the build, so this list can only shrink. Delete a line the moment
+# its Fixture goes green.
+
+# --- Not implemented yet ------------------------------------------------------
+# linear-gradient() backgrounds.
+features/gradients
+# background-image, which needs an image drawn behind a block rather than in flow.
+features/background-image
+# @page margin boxes: running headers, footers and page counters.
+features/paged-media
+
+# --- Cannot pass on a machine without these fonts -----------------------------
+# The Expectations name Georgia, Arial and Courier New in the PDF's font
+# objects. Those are Microsoft's fonts; this engine will not invent a BaseFont
+# name for a Face it does not have, so these Fixtures pass only where the fonts
+# are installed.
+features/font-family
+features/font-face
+
+# --- Being implemented --------------------------------------------------------
+# border-radius corners as Bezier curves.
+features/borders
+# overflow: hidden, which clips with `re W n`.
+features/pct-sizing
+# CSS custom properties and var().
+features/custom-properties
+# text-transform.
+features/text-polish
+# ::before and ::after generated content.
+features/generated-content
