@@ -4,4 +4,4 @@
 # PASSES fails the build, so this list can only shrink. Delete a line the moment
 # its Fixture goes green.
 #
-# The list is empty: all 41 Fixtures meet their Expectations.
+# The list is empty: all 48 Fixtures meet their Expectations.

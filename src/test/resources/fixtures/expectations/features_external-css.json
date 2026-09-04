@@ -12,6 +12,7 @@
   "visual_assertions": [
     "The heading is dark blue with a rule under it, from the linked sheet.",
     "The card has a pale blue background from the imported palette and a thin blue border from the linked sheet.",
+    "The card's text is dark, not red: the screen-only sheet exists on disk and would turn it red if a print render applied it.",
     "The render does not stall or fail on the https link, which is never fetched."
   ]
 }

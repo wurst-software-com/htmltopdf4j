@@ -195,7 +195,13 @@ final class TableLayout {
      * first row it appears in.
      */
     private static float rowHeight(Layout layout, TableRow row, float[] columns, int[] starts) {
-        float[] shifts = baselineShifts(layout, row, columns, starts);
+        return rowHeight(layout, row, columns, starts, baselineShifts(layout, row, columns, starts));
+    }
+
+    /** The same, for a caller that has already worked out the row's baseline shifts. */
+    private static float rowHeight(
+            Layout layout, TableRow row, float[] columns, int[] starts, float[] shifts) {
+
         float height = 0f;
         for (int i = 0; i < row.cells().size(); i++) {
             TableCell cell = row.cells().get(i);
@@ -265,8 +271,8 @@ final class TableLayout {
 
     private static void drawRow(Layout layout, TableRow row, float left, float[] columns, int[] starts) {
         float top = layout.y();
-        float height = rowHeight(layout, row, columns, starts);
         float[] shifts = baselineShifts(layout, row, columns, starts);
+        float height = rowHeight(layout, row, columns, starts, shifts);
 
         for (int i = 0; i < row.cells().size(); i++) {
             TableCell cell = row.cells().get(i);

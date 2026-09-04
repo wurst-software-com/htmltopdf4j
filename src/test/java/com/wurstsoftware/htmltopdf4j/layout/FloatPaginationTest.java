@@ -124,4 +124,30 @@ class FloatPaginationTest {
         assertEquals(0, laid.pageOf("beside"),
                 "the flow the float was taken out of carries on where it was");
     }
+
+    @Test
+    void aFloatTallerThanAPageEndsWhereItsContentEnds() {
+        // The box is measured from the Page the float started on, while the
+        // cursor that laid its content out belongs to the Page it ended on.
+        // Reading one as the other reserves the whole of the last Page, and
+        // narrows the lines below the float for nothing.
+        StringBuilder lines = new StringBuilder();
+        for (int i = 1; i <= 50; i++) {
+            lines.append("<p style='margin:0; line-height:20pt'>L").append(i).append("</p>");
+        }
+        Laid laid = Laid.of("<div style='float:left; width:150pt; background:#ff0'>" + lines + "</div>"
+                + PARAGRAPH.repeat(20));
+
+        Laid.Line last = laid.lines().stream()
+                .filter(line -> line.text().equals("L50"))
+                .findFirst()
+                .orElseThrow();
+        for (Laid.Line line : laid.lines()) {
+            if (line.page == last.page && line.y < last.y - 20f) {
+                assertTrue(line.x() < 60f,
+                        "below the float's last line the Page is free, so this one should not start at x "
+                                + line.x() + ": " + line.text());
+            }
+        }
+    }
 }

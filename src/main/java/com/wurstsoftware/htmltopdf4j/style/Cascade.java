@@ -339,7 +339,7 @@ public final class Cascade {
                 continue;
             }
             if (element.normalName().equals("style")) {
-                css.append(element.data()).append('\n');
+                css.append(ExternalStyles.inline(element.data(), baseDirectory)).append('\n');
             } else if (isStylesheetLink(element)) {
                 css.append(ExternalStyles.load(element.attr("href"), baseDirectory)).append('\n');
             }

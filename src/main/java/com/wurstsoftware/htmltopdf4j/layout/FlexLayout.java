@@ -73,7 +73,7 @@ final class FlexLayout {
             heights[i] = lineHeight(layout, lines.get(i), sizes.get(i));
         }
 
-        float free = crossFree(layout, style, heights, rowGap);
+        float free = crossFree(layout, style, heights, rowGap, width);
         String alignContent = style.raw("align-content", "stretch").trim().toLowerCase(Locale.ROOT);
         if (alignContent.equals("stretch") && free > 0f) {
             for (int i = 0; i < heights.length; i++) {
@@ -98,10 +98,14 @@ final class FlexLayout {
      * have taken theirs — which is the only case {@code align-content} has
      * anything to distribute.
      */
-    private static float crossFree(Layout layout, ComputedStyle style, float[] heights, float rowGap) {
-        float declared = style.length("height")
-                .map(length -> style.resolve(length, layout.contentBottom() - layout.contentTop()))
-                .orElse(0f);
+    private static float crossFree(
+            Layout layout, ComputedStyle style, float[] heights, float rowGap, float width) {
+
+        // Percentage padding resolves against the containing width even on the
+        // cross axis, so the container's own width is what it is measured in.
+        Edges padding = Edges.padding(style, width);
+        Edges border = Edges.borderWidths(style);
+        float declared = layout.declaredHeight(style, padding, border);
         if (declared <= 0f) {
             return 0f;
         }
@@ -109,12 +113,7 @@ final class FlexLayout {
         for (float height : heights) {
             used += height;
         }
-        Edges padding = Edges.padding(style, declared);
-        Edges border = Edges.borderWidths(style);
-        float inner = style.keyword("box-sizing", "border-box")
-                ? declared - padding.vertical() - border.vertical()
-                : declared;
-        return Math.max(0f, inner - used);
+        return Math.max(0f, declared - padding.vertical() - border.vertical() - used);
     }
 
     /** How tall a line is: as tall as the tallest item on it. */

@@ -54,12 +54,13 @@ byte-identical output. Anything outside that is None here and stays None.
 | --- | --- | --- |
 | `@media print`, `@media all`, bare feature queries | Full | Evaluated once per render: this is a printer |
 | `@media screen` | Full | Correctly does *not* apply |
+| `<link rel=stylesheet>` | Partial | Loaded from under `RenderOptions.baseDirectory`, in document order with the `<style>` blocks. Nothing is fetched: a target outside the base directory, an `http(s)` one, or any target at all when no base directory was given, is skipped and the Document is styled by what it carries |
 | `@page` size, orientation and margins | Full | |
 | `@page` margin boxes (`@top-center` and friends) | Full | Painted after pagination, because `counter(pages)` needs the final Page count |
 | `@font-face` with `local()`, `url()` and `data:` | Full | `local()` matches a face's full or PostScript name, not only its family. An alternative hinted `format(woff2)`, `format(svg)` or `format(embedded-opentype)` is skipped without being read. `http(s)` sources are refused, not fetched |
 | `@font-face` `font-weight` and `font-style` descriptors | Full | A second rule for one family supplies its bold or italic variant rather than replacing it |
 | `@font-face` source formats | Partial | Bare SFNT (`.ttf`, `.otf`) and WOFF1, which is unwrapped to SFNT. WOFF2 needs Brotli, which the JDK does not carry, so it is refused and the `src` chain moves on |
-| `@import` | None | Would be a network or file fetch mid-parse |
+| `@import` | Partial | Followed eight deep in a linked sheet and in a `<style>` block alike, with cycles cut, and inlined where the rule stood so the cascade order is the one the author wrote. Read from disk only, under the same rules as a linked sheet |
 | `@supports`, `@keyframes`, `@layer`, `@container` | None | Ignored; the rules around them survive |
 
 ## Values
@@ -114,8 +115,6 @@ byte-identical output. Anything outside that is None here and stays None.
 | `direction: rtl` and bidi reordering | Full | Via `java.text.Bidi` |
 | Vertical writing modes | None | |
 | Hyphenation | None | |
-
-| `<link rel=stylesheet>` and `@import` | Partial | Loaded from under `RenderOptions.baseDirectory`, in document order with the `<style>` blocks, with `@import` followed eight deep and cycles cut. Nothing is fetched: a target outside the base directory, an `http(s)` one, or any target at all when no base directory was given, is skipped and the Document is styled by what it carries |
 
 ## Layout modes
 

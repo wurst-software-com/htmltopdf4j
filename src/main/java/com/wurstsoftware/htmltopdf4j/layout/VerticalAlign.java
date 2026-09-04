@@ -20,13 +20,6 @@ final class VerticalAlign {
     private VerticalAlign() {}
 
     /**
-     * Whether this keyword grows the box rather than moving it. {@code stretch}
-     * is the initial value of {@code align-items}, so an absent one stretches
-     * too, and {@code baseline} is treated as a start alignment: the port has no
-     * cross-container baseline table, and starting is what it looks like for the
-     * single-line items a paged Document actually carries.
-     */
-    /**
      * Whether a table cell is aligned on the row's baseline, which is what it
      * does unless it says otherwise.
      */
@@ -39,6 +32,13 @@ final class VerticalAlign {
         return keyword == null || keyword.isBlank() || keyword.trim().equalsIgnoreCase("auto");
     }
 
+    /**
+     * Whether this keyword grows the box rather than moving it. {@code stretch}
+     * is the initial value of {@code align-items}, so an absent one stretches
+     * too, and {@code baseline} is treated as a start alignment: the port has no
+     * cross-container baseline table, and starting is what it looks like for the
+     * single-line items a paged Document actually carries.
+     */
     static boolean stretches(String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return true;

@@ -532,7 +532,12 @@ public final class Layout {
         y += padding.bottom() + border.bottom();
 
         int endPage = pageIndex;
-        float bottom = Math.max(y, top + boxHeight);
+        // `boxHeight` is measured from `top` on the Page the float started on,
+        // and `y` is the cursor on the Page it ended on: a declared height its
+        // content did not fill reaches past `y` by whatever is left of it, and
+        // no further. Reading the one as the other would reserve Pages the
+        // float never touched.
+        float bottom = y + Math.max(0f, boxHeight - laidOutHeight(startPage, endPage, top));
         // The band is the box's whole extent, but the box is painted only
         // inside the content area: a Page it merely overflows into is not a
         // Page it was laid out on, and has no room reserved for it.
@@ -544,6 +549,15 @@ public final class Layout {
         // Page it was on, however many Pages the float itself reached.
         pageIndex = startPage;
         y = top;
+    }
+
+    /** How much of a box's height the Pages from {@code startPage} to {@code endPage} already carry. */
+    private float laidOutHeight(int startPage, int endPage, float top) {
+        return endPage == startPage
+                ? y - top
+                : (contentBottom - top)
+                        + (endPage - startPage - 1) * (contentBottom - contentTop)
+                        + (y - contentTop);
     }
 
     /**
@@ -982,13 +996,11 @@ public final class Layout {
                 List<InlineBox> inlines = run.inlines().stream()
                         .map(box -> already.contains(box.id()) ? box.continued() : box)
                         .toList();
-                remaining.add(switch (fragment) {
-                    case LineBreaker.TextFragment text ->
-                            InlineRun.text(text.text(), run.style(), run.link(), inlines);
-                    case LineBreaker.AtomicFragment atomic -> atomic.run().image() != null
-                            ? InlineRun.image(run.image(), run.style(), run.link(), inlines)
-                            : InlineRun.inlineBlock(run.inlineBlock(), run.style(), run.link(), inlines);
-                });
+                // A text fragment carries the slice of the run the break left,
+                // which is not the run's own text; anything atomic is whole.
+                remaining.add(fragment instanceof LineBreaker.TextFragment text
+                        ? InlineRun.text(text.text(), run.style(), run.link(), inlines)
+                        : run.withInlines(inlines));
             }
             already.addAll(idsOf(broken.get(i)));
         }
@@ -1237,12 +1249,7 @@ public final class Layout {
         Edges padding = Edges.padding(style, width);
         Edges border = Edges.borderWidths(style);
         float edges = padding.vertical() + border.vertical();
-        // A declared height is a minimum, the same way it is in the block flow:
-        // content that overruns it makes the box taller rather than spilling.
-        float declared = Math.max(lengthOf(style, "height"), lengthOf(style, "min-height"));
-        if (declared > 0f && !style.keyword("box-sizing", "border-box")) {
-            declared += edges;
-        }
+        float declared = declaredHeight(style, padding, border);
         float height = 0f;
         for (BoxChild child : block.children()) {
             height += switch (child) {
@@ -1278,19 +1285,29 @@ public final class Layout {
             int startPage,
             float startY) {
 
-        float declared = Math.max(lengthOf(style, "height"), lengthOf(style, "min-height"));
-        if (declared > 0f && !style.keyword("box-sizing", "border-box")) {
-            declared += padding.vertical() + border.vertical();
-        }
         float minimumHeight = Math.max(
                 stretchedHeight != null && style.length("height").isEmpty() ? stretchedHeight : 0f,
-                declared);
+                declaredHeight(style, padding, border));
         if (pageIndex == startPage && y - startY < minimumHeight) {
             y = startY + minimumHeight;
         }
     }
 
     /** A vertical length in points, or zero when it is not declared. */
+    /**
+     * The border-box height a style declares as a floor: its {@code height} or
+     * its {@code min-height}, whichever is taller. A declared height is a
+     * minimum, the same way it is in the block flow — content that overruns it
+     * makes the box taller rather than spilling out of it — so the two
+     * properties mean the same thing here and the taller one wins.
+     */
+    float declaredHeight(ComputedStyle style, Edges padding, Edges border) {
+        float declared = Math.max(lengthOf(style, "height"), lengthOf(style, "min-height"));
+        return declared > 0f && !style.keyword("box-sizing", "border-box")
+                ? declared + padding.vertical() + border.vertical()
+                : declared;
+    }
+
     private float lengthOf(ComputedStyle style, String property) {
         return style.length(property)
                 .map(length -> style.resolve(length, contentBottom - contentTop))

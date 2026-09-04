@@ -107,7 +107,7 @@ Expectation files.
 ## Building
 
 ```
-mvn test        # 581 tests, including 48 Fixtures against their Expectations
+mvn test        # 585 tests, including 48 Fixtures against their Expectations
 ```
 
 Java 21 is required to build and to run.

@@ -42,6 +42,15 @@ final class ExternalStyles {
         return read(href, baseDirectory, new HashSet<>(), 0);
     }
 
+    /**
+     * A {@code <style>} block with its {@code @import}s followed. A block is
+     * read from the Document rather than from disk, so the imports in it resolve
+     * against the base directory itself.
+     */
+    static String inline(String css, Path baseDirectory) {
+        return baseDirectory == null ? css : inlineImports(css, baseDirectory, baseDirectory, new HashSet<>(), 0);
+    }
+
     private static String read(String href, Path baseDirectory, Set<Path> seen, int depth) {
         Path file = resolve(href, baseDirectory);
         if (file == null || depth > MAX_IMPORT_DEPTH || !seen.add(file)) {

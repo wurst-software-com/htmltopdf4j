@@ -182,12 +182,13 @@ public final class RenderOptions {
             return this;
         }
 
-        /** {@code null} disables resolving {@code <img src>} against the file system. */
+        /** The fonts this render may draw with; {@link FontEnvironment#shared()} by default. */
         public Builder fontEnvironment(FontEnvironment fontEnvironment) {
             this.fontEnvironment = Objects.requireNonNull(fontEnvironment, "fontEnvironment");
             return this;
         }
 
+        /** {@code null} disables resolving {@code <img src>} against the file system. */
         public Builder baseDirectory(Path baseDirectory) {
             this.baseDirectory = baseDirectory;
             return this;

@@ -65,4 +65,21 @@ class TableBaselineTest {
         assertTrue(laid.text("NEXTROW").y() < laid.text("small").y() - 8f,
                 "the next row starts below the shifted line, not on top of it");
     }
+
+    @Test
+    void aBorderedCellIsShiftedInsideARowThatAllowsForItsBorder() {
+        // The shift a cell is dropped by counts its top border, so the row has
+        // to count its borders too, or the line it dropped lands in the row
+        // below.
+        Laid laid = Laid.of("<table><tr>"
+                + "<td style='border:20pt solid #00f'>BORDERED</td>"
+                + "<td>plain</td>"
+                + "</tr>"
+                + "<tr><td>NEXTROW</td><td>x</td></tr></table>");
+
+        assertTrue(laid.text("NEXTROW").y() < laid.text("BORDERED").y() - 25f,
+                "the row has to be tall enough for the border under the line it set the baseline by: "
+                        + "NEXTROW at " + laid.text("NEXTROW").y() + ", BORDERED at "
+                        + laid.text("BORDERED").y());
+    }
 }

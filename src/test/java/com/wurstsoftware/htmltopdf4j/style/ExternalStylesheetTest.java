@@ -60,6 +60,30 @@ class ExternalStylesheetTest {
     }
 
     @Test
+    void anImportInsideAStyleBlockIsFollowedToo() {
+        // The commonest form of all: a Document with one `<style>` that pulls in
+        // the sheet it shares with its siblings.
+        try {
+            write("theme.css", "p { color: red }");
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+
+        assertEquals(RED, colorOfTarget(
+                "<style>@import url('theme.css');</style><p id=target>x</p>"));
+    }
+
+    @Test
+    void aStyleBlockKeepsItsOwnRulesAfterAnImport() throws IOException {
+        // An `@import` is inlined where it stood, so the block's own rules still
+        // come after it and still win.
+        write("theme.css", "p { color: red }");
+
+        assertEquals(GREEN, colorOfTarget(
+                "<style>@import url('theme.css'); p { color: green }</style><p id=target>x</p>"));
+    }
+
+    @Test
     void anImportCycleTerminates() throws IOException {
         write("a.css", "@import 'b.css'; p { color: red }");
         write("b.css", "@import 'a.css';");

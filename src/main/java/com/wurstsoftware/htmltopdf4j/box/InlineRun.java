@@ -35,21 +35,22 @@ public record InlineRun(
         return new InlineRun(text, style, link, null, null, inlines);
     }
 
-    public static InlineRun image(ImageBox image, ComputedStyle style, String link) {
-        return image(image, style, link, List.of());
-    }
-
     public static InlineRun image(ImageBox image, ComputedStyle style, String link, List<InlineBox> inlines) {
         return new InlineRun("", style, link, image, null, inlines);
-    }
-
-    public static InlineRun inlineBlock(BlockBox block, ComputedStyle style, String link) {
-        return inlineBlock(block, style, link, List.of());
     }
 
     public static InlineRun inlineBlock(
             BlockBox block, ComputedStyle style, String link, List<InlineBox> inlines) {
         return new InlineRun("", style, link, null, block, inlines);
+    }
+
+    /**
+     * The same run, inside these inline boxes instead. A line break re-files the
+     * runs it did not fit with the boxes they are still inside, which by then
+     * have lost their left edge.
+     */
+    public InlineRun withInlines(List<InlineBox> inlines) {
+        return new InlineRun(text, style, link, image, inlineBlock, inlines);
     }
 
     public boolean isText() {
