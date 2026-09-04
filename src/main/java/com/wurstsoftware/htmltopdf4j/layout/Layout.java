@@ -57,6 +57,7 @@ public final class Layout {
     private final FaceRegistry faces;
     private final ImageLoader images;
     private final LineBreaker breaker;
+    private final InlineDecoration inlineDecoration;
 
     private final List<Page> pages = new ArrayList<>();
     private final List<String> links = new ArrayList<>();
@@ -95,6 +96,7 @@ public final class Layout {
         this.faces = new FaceRegistry(options.defaultFace(), options.fontEnvironment());
         this.images = new ImageLoader(options.baseDirectory().orElse(null));
         this.breaker = new LineBreaker(faces::indexFor, faces::chain, this::measureAtomic);
+        this.inlineDecoration = new InlineDecoration(breaker);
         declareFontFaces(stylesheet, options.baseDirectory().orElse(null), options.fontEnvironment());
 
         Edges margins = setup.margins();
@@ -821,7 +823,7 @@ public final class Layout {
             }
 
             List<InlineRun> next = broken.size() == 1 ? List.of() : rest(broken);
-            paintInlineBoxes(fragments, origins, baseline, lineWidth, next);
+            inlineDecoration.paint(page(), fragments, origins, pdfY(baseline), lineWidth, next);
             for (int i = 0; i < fragments.size(); i++) {
                 emitFragment(fragments.get(i), origins[i], baseline);
             }
@@ -829,108 +831,6 @@ public final class Layout {
             lineIndent = 0f;
             remaining = next;
         }
-    }
-
-    /**
-     * Paints the background and borders of the inline boxes this line is inside,
-     * one rectangle per box per line, behind the text that is about to be drawn.
-     *
-     * <p>Outer boxes are painted before the boxes nested in them, so a chip
-     * inside a highlighted sentence sits on top of the highlight.
-     */
-    private void paintInlineBoxes(
-            List<LineBreaker.Fragment> fragments,
-            float[] origins,
-            float baseline,
-            float containingWidth,
-            List<InlineRun> next) {
-
-        java.util.Set<Integer> continuing = new java.util.HashSet<>();
-        for (InlineRun run : next) {
-            run.inlines().forEach(box -> continuing.add(box.id()));
-        }
-        for (int depth = 0; depth < maxInlineDepth(fragments); depth++) {
-            int start = -1;
-            for (int i = 0; i <= fragments.size(); i++) {
-                InlineBox box = i < fragments.size() ? inlineAt(fragments.get(i), depth) : null;
-                InlineBox open = start < 0 ? null : inlineAt(fragments.get(start), depth);
-                if (start >= 0 && !open.sameBoxAs(box)) {
-                    paintInlineBox(open, fragments, origins, start, i - 1, baseline, containingWidth,
-                            !continuing.contains(open.id()));
-                    start = -1;
-                }
-                if (box != null && start < 0) {
-                    start = i;
-                }
-            }
-        }
-    }
-
-    private static int maxInlineDepth(List<LineBreaker.Fragment> fragments) {
-        int depth = 0;
-        for (LineBreaker.Fragment fragment : fragments) {
-            depth = Math.max(depth, fragment.run().inlines().size());
-        }
-        return depth;
-    }
-
-    private static InlineBox inlineAt(LineBreaker.Fragment fragment, int depth) {
-        List<InlineBox> inlines = fragment.run().inlines();
-        return depth < inlines.size() ? inlines.get(depth) : null;
-    }
-
-    /** One inline box's rectangle on one line, from its first fragment to its last. */
-    private void paintInlineBox(
-            InlineBox box,
-            List<LineBreaker.Fragment> fragments,
-            float[] origins,
-            int first,
-            int last,
-            float baseline,
-            float containingWidth,
-            boolean closesHere) {
-
-        ComputedStyle style = box.style();
-        Edges padding = Edges.padding(style, containingWidth);
-        Edges border = Edges.borderWidths(style);
-        float left = origins[first] + fragments.get(first).x()
-                - (box.opensHere() ? padding.left() + border.left() : 0f);
-        float right = origins[last] + fragments.get(last).x() + fragments.get(last).width()
-                + (closesHere ? padding.right() + border.right() : 0f);
-
-        // The box is as tall as everything it wraps on this line — its tallest
-        // ascent above the baseline, its deepest descent below it, from the
-        // Faces' own metrics — grown by the box's own padding and border.
-        LineBreaker.Extent extent = breaker.extentOf(fragments.subList(first, last + 1));
-        float bottom = pdfY(baseline) - extent.descent() - padding.bottom() - border.bottom();
-        float height = extent.height() + padding.vertical() + border.vertical();
-        Rect rect = new Rect(left, bottom, Math.max(0f, right - left), height);
-
-        // A rounded corner belongs to a whole box: a box cut by a line break is
-        // drawn square, because the corners the break made are not corners.
-        float radius = box.opensHere() && closesHere
-                ? style.length("border-top-left-radius")
-                        .map(length -> style.resolve(length, rect.width()))
-                        .orElse(0f)
-                : 0f;
-        Edges sides = new Edges(
-                border.top(),
-                closesHere ? border.right() : 0f,
-                border.bottom(),
-                box.opensHere() ? border.left() : 0f);
-
-        List<PaintCommand> decoration = new ArrayList<>();
-        style.backgroundColor().ifPresent(color -> {
-            decoration.add(new PaintCommand.SetFillColor(color));
-            decoration.add(radius > 0f
-                    ? new PaintCommand.FillRoundedRect(
-                            new RoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius))
-                    : new PaintCommand.FillRect(rect));
-        });
-        if (sides.horizontal() + sides.vertical() > 0f) {
-            paintBorders(decoration, style, rect, sides, radius);
-        }
-        decoration.forEach(page()::add);
     }
 
     /**
@@ -1264,7 +1164,6 @@ public final class Layout {
         }
     }
 
-    /** A vertical length in points, or zero when it is not declared. */
     /**
      * The border-box height a style declares as a floor: its {@code height} or
      * its {@code min-height}, whichever is taller. A declared height is a

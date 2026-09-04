@@ -152,7 +152,7 @@ final class FlexLayout {
         for (int i = 0; i < line.size(); i++) {
             BlockBox box = line.get(i).box();
             baselines[i] = Float.NaN;
-            if (!VerticalAlign.asksForBaseline(alignmentOf(box, container))) {
+            if (!alignmentOf(box, container).isBaseline()) {
                 continue;
             }
             ComputedStyle style = box.style();
@@ -176,9 +176,8 @@ final class FlexLayout {
      * What decides where one item sits across its line: {@code align-self} when
      * it says anything, and the container's {@code align-items} otherwise.
      */
-    private static String alignmentOf(BlockBox box, ComputedStyle container) {
-        String self = box.style().raw("align-self");
-        return VerticalAlign.isAuto(self) ? container.raw("align-items") : self;
+    private static Alignment alignmentOf(BlockBox box, ComputedStyle container) {
+        return Alignment.of(box.style(), "align-self").orElse(Alignment.of(container, "align-items"));
     }
 
     /** A column container stacks its items, which is what block flow already does. */
@@ -294,13 +293,13 @@ final class FlexLayout {
             BlockBox box = line.get(index).box();
             // `align-self` decides for one item, `align-items` for the rest, and
             // `stretch` is a height rather than an offset.
-            String alignment = alignmentOf(box, container);
-            boolean stretch = VerticalAlign.stretches(alignment);
+            Alignment alignment = alignmentOf(box, container);
+            boolean stretch = alignment.stretches();
             float free = lineHeight - layout.measureChildren(box, sizes[index]);
             // A baseline-aligned item drops onto the line's baseline; the other
             // keywords divide the room the item leaves over instead.
             layout.setY(top + (stretch ? 0f
-                    : shifts[index] > 0f ? shifts[index] : VerticalAlign.offset(alignment, free)));
+                    : shifts[index] > 0f ? shifts[index] : alignment.offset(free)));
             layout.flowItem(box, x, width, sizes[index], stretch ? lineHeight : null);
             bottom = Math.max(bottom, layout.y());
             x += sizes[index] + line.get(index).outerMargin() + between;

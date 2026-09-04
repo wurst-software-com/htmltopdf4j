@@ -107,7 +107,7 @@ Expectation files.
 ## Building
 
 ```
-mvn test        # 585 tests, including 48 Fixtures against their Expectations
+mvn test        # 606 tests, including 48 Fixtures against their Expectations
 mvn test -Pscale   # the 1.8 MB scale document, excluded from the loop above
 ```
 

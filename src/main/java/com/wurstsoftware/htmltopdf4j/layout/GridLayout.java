@@ -108,7 +108,7 @@ final class GridLayout {
             rowTops[row + 1] = rowTops[row] + rows[row] + rowGap;
         }
 
-        String containerAlignment = style.raw("align-items");
+        Alignment containerAlignment = Alignment.of(style, "align-items");
         for (int row = 0; row < rowCount; row++) {
             // A row whose items ask to stay whole moves as a unit: breaking one
             // item onto the next Page would leave its neighbours behind and tear
@@ -131,14 +131,13 @@ final class GridLayout {
                 float track = span(rows, placement.row(), placement.rowSpan(), rowGap);
                 float free = track - measured[i];
                 // `align-self` decides for one item, `align-items` for the rest.
-                String self = items.get(i).style().raw("align-self");
-                String alignment = self != null && !VerticalAlign.isAuto(self) ? self : containerAlignment;
+                Alignment alignment =
+                        Alignment.of(items.get(i).style(), "align-self").orElse(containerAlignment);
                 // `stretch` is not an offset: it makes the item as tall as its
                 // track, which is why it needs the track height and not the
                 // room the item leaves over.
-                boolean stretch = VerticalAlign.stretches(alignment);
-                layout.setY(rowTops[placement.row()]
-                        + (stretch ? 0f : VerticalAlign.offset(alignment, free)));
+                boolean stretch = alignment.stretches();
+                layout.setY(rowTops[placement.row()] + (stretch ? 0f : alignment.offset(free)));
                 layout.flowItem(items.get(i), x, width, itemWidth, stretch ? track : null);
             }
         }

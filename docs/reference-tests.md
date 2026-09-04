@@ -5,7 +5,7 @@ they be ported where they assert behaviour the render seam cannot reach, and
 dropped where they assert internal structure this design does not reproduce.
 This is that accounting: every one is in exactly one row below.
 
-The Java suite is **585 tests**, of which 48 are the Fixtures — 41 ported from
+The Java suite is **606 tests**, of which 48 are the Fixtures — 41 ported from
 the reference corpus plus seven this port authored itself, each of which says in
 its Expectation why it had no reference Expectation to port. It is larger than
 the reference's because a hand translation needs its own tests at the seams the

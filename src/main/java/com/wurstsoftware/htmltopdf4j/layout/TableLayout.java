@@ -229,7 +229,9 @@ final class TableLayout {
             TableCell cell = row.cells().get(i);
             ComputedStyle style = cell.content().style();
             baselines[i] = Float.NaN;
-            if (!VerticalAlign.isBaseline(style.raw("vertical-align"))) {
+            // A cell says nothing about `vertical-align` far more often than it
+            // says `baseline`, and both mean the row's baseline.
+            if (!Alignment.of(style, "vertical-align").orElse(Alignment.BASELINE).isBaseline()) {
                 continue;
             }
             float width = spanWidth(columns, starts[i], cell.columnSpan());
@@ -294,7 +296,9 @@ final class TableLayout {
             // A baseline-aligned cell drops onto the row's baseline; the other
             // keywords divide the room the content leaves over instead.
             layout.setY(top + padding.top() + border.top()
-                    + (shifts[i] > 0f ? shifts[i] : VerticalAlign.offset(style.raw("vertical-align"), free)));
+                    + (shifts[i] > 0f
+                            ? shifts[i]
+                            : Alignment.of(style, "vertical-align").offset(free)));
             layout.flowChildren(cell.content().children(), x + padding.left() + border.left(), inner);
         }
         layout.setY(top + height);
