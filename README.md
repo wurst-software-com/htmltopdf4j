@@ -97,19 +97,25 @@ Expectation files.
 ## Building
 
 ```
-mvn test        # 479 tests, including 41 Fixtures against their Expectations
+mvn test        # 498 tests, including 41 Fixtures against their Expectations
 ```
 
 Java 21 is required to build and to run.
 
-Two Fixtures name Microsoft's Georgia, Arial and Courier New in their
-Expectations and can only pass where those fonts are installed; they are listed
-in `src/test/resources/parity-known-failures.txt`, which reports them as skipped
-rather than failed. That file can only shrink: a listed Fixture that *passes*
+All 41 Fixtures pass, and `src/test/resources/parity-known-failures.txt` — the
+ledger that reports a listed Fixture as skipped rather than failed — is empty.
+The mechanism stays because it can only shrink: a listed Fixture that *passes*
 fails the build.
+
+Two Fixtures do depend on the machine's fonts. `features/font-family` and
+`features/font-face` assert that Georgia, Arial and Courier New appear in the
+PDF's font objects, and this engine will not invent a `BaseFont` name for a Face
+it does not have, so a machine without those families will see them fail.
 
 ## Design notes
 
 - [CONTEXT.md](CONTEXT.md) — the domain vocabulary this codebase speaks.
 - [docs/adr/](docs/adr/) — the four decisions that shaped the port.
 - [docs/coverage-matrix.md](docs/coverage-matrix.md) — what renders, and how well.
+- [docs/reference-tests.md](docs/reference-tests.md) — every one of the Rust
+  engine's 219 unit tests, and whether it was ported or dropped.
