@@ -25,6 +25,19 @@ public final class BoxTreeBuilder {
 
     private final Cascade cascade;
 
+    /**
+     * The decorated inline elements currently open, outermost first.
+     *
+     * <p>This is a field rather than a parameter threaded through the walk
+     * because it is pure traversal state: it always describes the path from the
+     * nearest block down to the run being emitted, and a block box that opens
+     * inside an inline one starts a line of its own with an empty path.
+     */
+    private final List<InlineBox> openInlines = new ArrayList<>();
+
+    /** Gives each decorated inline element an identity its runs can share. */
+    private int nextInlineId;
+
     private BoxTreeBuilder(Cascade cascade) {
         this.cascade = cascade;
     }
@@ -171,9 +184,31 @@ public final class BoxTreeBuilder {
                     // keeps only the Page counters, and those belong to @page.
                     com.wurstsoftware.htmltopdf4j.style.ContentValue.NONE);
             if (!text.isEmpty()) {
-                content.inline(InlineRun.text(text, style, link));
+                content.inline(InlineRun.text(text, style, link, inlines()));
             }
         });
+    }
+
+    /**
+     * Runs {@code body} with {@code element} on the open-inline path, when it is
+     * an inline element with something to paint or to reserve.
+     */
+    private void withInline(ComputedStyle style, Runnable body) {
+        if (!InlineBox.decorates(style)) {
+            body.run();
+            return;
+        }
+        openInlines.add(new InlineBox(nextInlineId++, style, true));
+        try {
+            body.run();
+        } finally {
+            openInlines.remove(openInlines.size() - 1);
+        }
+    }
+
+    /** The open-inline path as the runs emitted right now should record it. */
+    private List<InlineBox> inlines() {
+        return List.copyOf(openInlines);
     }
 
     private void appendElement(Element element, Content content, String link) {
@@ -195,7 +230,7 @@ public final class BoxTreeBuilder {
             if (display.isBlockLevel() || isFloated(style)) {
                 content.block(image);
             } else {
-                content.inline(InlineRun.image(image, style, href));
+                content.inline(InlineRun.image(image, style, href, inlines()));
             }
             return;
         }
@@ -208,18 +243,26 @@ public final class BoxTreeBuilder {
                     // own right, not part of a line.
                     content.block(blockBox(element, style, href, null));
                 } else {
-                    appendChildren(element, content, href);
+                    withInline(style, () -> appendChildren(element, content, href));
                 }
             }
-            case INLINE_BLOCK, INLINE_FLEX, INLINE_GRID ->
-                    content.inline(InlineRun.inlineBlock(blockBox(element, style, href, null), style, href));
+            case INLINE_BLOCK, INLINE_FLEX, INLINE_GRID -> content.inline(InlineRun.inlineBlock(
+                    blockBox(element, style, href, null), style, href, inlines()));
             default -> content.block(blockBox(element, style, href, markerOf(element, style)));
         }
     }
 
     private BlockBox blockBox(Element element, ComputedStyle style, String link, String marker) {
-        return new BlockBox(style, element.normalName(), marker, anchorOf(element),
-                childrenOf(element, link));
+        // A block box inside an inline one begins its own lines, and an inline
+        // box has no say over them, so the path does not follow it down.
+        List<InlineBox> outer = List.copyOf(openInlines);
+        openInlines.clear();
+        try {
+            return new BlockBox(style, element.normalName(), marker, anchorOf(element),
+                    childrenOf(element, link));
+        } finally {
+            openInlines.addAll(outer);
+        }
     }
 
     /** An element's parent element, or itself at the root, so a style is always available. */
@@ -263,7 +306,7 @@ public final class BoxTreeBuilder {
         if (collapsed.isEmpty()) {
             return;
         }
-        content.inline(InlineRun.text(transform(collapsed, style), style, link));
+        content.inline(InlineRun.text(transform(collapsed, style), style, link, inlines()));
     }
 
     /** Preformatted text keeps its spaces, and each newline is a forced break. */
@@ -274,7 +317,7 @@ public final class BoxTreeBuilder {
                 content.breakLine(style);
             }
             if (!lines[i].isEmpty()) {
-                content.inline(InlineRun.text(transform(lines[i], style), style, link));
+                content.inline(InlineRun.text(transform(lines[i], style), style, link, inlines()));
             }
         }
     }
@@ -342,7 +385,8 @@ public final class BoxTreeBuilder {
                 continue;
             }
             if (run.text().endsWith(" ")) {
-                runs.set(i, InlineRun.text(run.text().stripTrailing(), run.style(), run.link()));
+                runs.set(i, InlineRun.text(
+                        run.text().stripTrailing(), run.style(), run.link(), run.inlines()));
             }
             return;
         }

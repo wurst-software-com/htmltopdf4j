@@ -1,6 +1,7 @@
 package com.wurstsoftware.htmltopdf4j.box;
 
 import com.wurstsoftware.htmltopdf4j.style.ComputedStyle;
+import java.util.List;
 
 /**
  * A contiguous piece of inline content sharing one computed style: text, an
@@ -11,24 +12,44 @@ import com.wurstsoftware.htmltopdf4j.style.ComputedStyle;
  * generator, because whether a space falls at a wrap point is Layout's decision.
  *
  * @param link the {@code href} this run is inside, or {@code null}
+ * @param inlines the decorated inline elements this run is inside, outermost
+ *     first, so a chip knows which of its lines to draw its near edges on
  */
 public record InlineRun(
         String text,
         ComputedStyle style,
         String link,
         ImageBox image,
-        BlockBox inlineBlock) {
+        BlockBox inlineBlock,
+        List<InlineBox> inlines) {
+
+    public InlineRun {
+        inlines = List.copyOf(inlines);
+    }
 
     public static InlineRun text(String text, ComputedStyle style, String link) {
-        return new InlineRun(text, style, link, null, null);
+        return text(text, style, link, List.of());
+    }
+
+    public static InlineRun text(String text, ComputedStyle style, String link, List<InlineBox> inlines) {
+        return new InlineRun(text, style, link, null, null, inlines);
     }
 
     public static InlineRun image(ImageBox image, ComputedStyle style, String link) {
-        return new InlineRun("", style, link, image, null);
+        return image(image, style, link, List.of());
+    }
+
+    public static InlineRun image(ImageBox image, ComputedStyle style, String link, List<InlineBox> inlines) {
+        return new InlineRun("", style, link, image, null, inlines);
     }
 
     public static InlineRun inlineBlock(BlockBox block, ComputedStyle style, String link) {
-        return new InlineRun("", style, link, null, block);
+        return inlineBlock(block, style, link, List.of());
+    }
+
+    public static InlineRun inlineBlock(
+            BlockBox block, ComputedStyle style, String link, List<InlineBox> inlines) {
+        return new InlineRun("", style, link, null, block, inlines);
     }
 
     public boolean isText() {

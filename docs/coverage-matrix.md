@@ -4,7 +4,7 @@ What this engine renders, per HTML element and CSS feature: **Full**, **Partial*
 or **None**. "Partial" always says what is missing.
 
 This is the honest state of the port, not a roadmap. It is written against the
-code, and the Parity harness — 43 Fixtures, one JUnit case each — is what keeps
+code, and the Parity harness — 44 Fixtures, one JUnit case each — is what keeps
 it from drifting. Where a row says Full, there is a Fixture or a unit test that
 would fail if it stopped being true.
 
@@ -120,6 +120,7 @@ byte-identical output. Anything outside that is None here and stays None.
 | Feature | Support | Notes |
 | --- | --- | --- |
 | Normal flow | Full | |
+| Inline box decoration: `background`, `border`, `border-radius`, `padding` on a `<span>` | Full | Painted once per line the box occupies. The left border and left padding are on the first line, the right on the last, and top and bottom on all of them; a box cut by a line break is drawn square, because the corners the break made are not corners. Horizontal padding is space on the line; vertical padding grows the painted box without changing the line box, which is what CSS says |
 | `float: left`, `right`, `none`; `clear` | Full | Floats become bands the line breaker consults line by line. A declared `height` or `min-height` sizes the painted box and the band alike, and is a minimum: content that overruns it makes the float taller |
 | `position: static`, `relative`, `absolute`, `fixed` | Full | Absolute offsets resolve against the page area, which is the initial containing block in paged media. `fixed` repeats on every Page |
 | `position: sticky` | None | |
@@ -181,7 +182,7 @@ byte-identical output. Anything outside that is None here and stays None.
 ## Environment dependence
 
 The known-failures ledger (`src/test/resources/parity-known-failures.txt`) is
-**empty**: all 43 Fixtures meet their Expectations. The mechanism stays, because
+**empty**: all 44 Fixtures meet their Expectations. The mechanism stays, because
 it can only shrink — a listed Fixture that starts passing fails the build — but
 it currently lists nothing.
 

@@ -1,5 +1,6 @@
 package com.wurstsoftware.htmltopdf4j.layout;
 
+import com.wurstsoftware.htmltopdf4j.box.InlineBox;
 import com.wurstsoftware.htmltopdf4j.box.InlineRun;
 import com.wurstsoftware.htmltopdf4j.style.ComputedStyle;
 import com.wurstsoftware.htmltopdf4j.style.TextAlign;
@@ -86,7 +87,13 @@ public final class LineBreaker {
      */
     public List<VisualLine> breakLines(List<InlineRun> runs, float width, float firstLineIndent) {
         Wrapper wrapper = new Wrapper(width, Math.max(0f, firstLineIndent));
+        List<InlineBox> open = List.of();
         for (InlineRun run : runs) {
+            // An inline box's padding and border are space on the line, on the
+            // line it opens and the line it closes on: reserving it here is what
+            // stops a chip's background from lying under the word beside it.
+            wrapper.crossEdges(open, run.inlines(), width);
+            open = run.inlines();
             if (!run.isText()) {
                 wrapper.atomic(run);
             } else if (run.text().isEmpty()) {
@@ -97,7 +104,30 @@ public final class LineBreaker {
                 wrapper.text(run);
             }
         }
+        wrapper.crossEdges(open, List.of(), width);
         return wrapper.finish();
+    }
+
+    /** The space an inline box reserves before its first fragment on a line. */
+    private static float leading(InlineBox box, float containingWidth) {
+        return Edges.padding(box.style(), containingWidth).left()
+                + Edges.borderWidths(box.style()).left();
+    }
+
+    /** The space it reserves after its last one. */
+    private static float trailing(InlineBox box, float containingWidth) {
+        return Edges.padding(box.style(), containingWidth).right()
+                + Edges.borderWidths(box.style()).right();
+    }
+
+    /** How many inline boxes two runs have in common, from the outside in. */
+    private static int commonDepth(List<InlineBox> before, List<InlineBox> after) {
+        int depth = 0;
+        while (depth < before.size() && depth < after.size()
+                && before.get(depth).sameBoxAs(after.get(depth))) {
+            depth++;
+        }
+        return depth;
     }
 
     /**
@@ -123,6 +153,23 @@ public final class LineBreaker {
         Wrapper(float available, float firstLineIndent) {
             this.available = available;
             this.x = firstLineIndent;
+        }
+
+        /**
+         * Reserves the edges of the inline boxes that end between two runs and
+         * of those that begin there. A box that opened on an earlier line has
+         * no left edge here: it was cut by the break, not started by it.
+         */
+        void crossEdges(List<InlineBox> before, List<InlineBox> after, float containingWidth) {
+            int common = commonDepth(before, after);
+            for (int i = before.size() - 1; i >= common; i--) {
+                x += trailing(before.get(i), containingWidth);
+            }
+            for (int i = common; i < after.size(); i++) {
+                if (after.get(i).opensHere()) {
+                    x += leading(after.get(i), containingWidth);
+                }
+            }
         }
 
         void place(Fragment fragment) {

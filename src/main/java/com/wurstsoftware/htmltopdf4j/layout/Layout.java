@@ -6,6 +6,7 @@ import com.wurstsoftware.htmltopdf4j.box.BlockBox;
 import com.wurstsoftware.htmltopdf4j.box.BoxChild;
 import com.wurstsoftware.htmltopdf4j.box.BoxTree;
 import com.wurstsoftware.htmltopdf4j.box.ImageBox;
+import com.wurstsoftware.htmltopdf4j.box.InlineBox;
 import com.wurstsoftware.htmltopdf4j.box.InlineRun;
 import com.wurstsoftware.htmltopdf4j.box.LineBox;
 import com.wurstsoftware.htmltopdf4j.box.TableBox;
@@ -825,17 +826,125 @@ public final class Layout {
             float slack = gaps.isEmpty() ? 0f : Math.max(0f, lineWidth - drawn);
 
             int widened = 0;
+            float[] origins = new float[fragments.size()];
             for (int i = 0; i < fragments.size(); i++) {
                 if (gaps.contains(i)) {
                     widened++;
                 }
                 float spread = gaps.isEmpty() ? 0f : slack * widened / gaps.size();
-                emitFragment(fragments.get(i), lineLeft + offset + spread, baseline);
+                origins[i] = lineLeft + offset + spread;
+            }
+
+            List<InlineRun> next = broken.size() == 1 ? List.of() : rest(broken);
+            paintInlineBoxes(fragments, origins, baseline, lineWidth, next);
+            for (int i = 0; i < fragments.size(); i++) {
+                emitFragment(fragments.get(i), origins[i], baseline);
             }
             y += visual.height();
             lineIndent = 0f;
-            remaining = broken.size() == 1 ? List.of() : rest(broken);
+            remaining = next;
         }
+    }
+
+    /**
+     * Paints the background and borders of the inline boxes this line is inside,
+     * one rectangle per box per line, behind the text that is about to be drawn.
+     *
+     * <p>Outer boxes are painted before the boxes nested in them, so a chip
+     * inside a highlighted sentence sits on top of the highlight.
+     */
+    private void paintInlineBoxes(
+            List<LineBreaker.Fragment> fragments,
+            float[] origins,
+            float baseline,
+            float containingWidth,
+            List<InlineRun> next) {
+
+        java.util.Set<Integer> continuing = new java.util.HashSet<>();
+        for (InlineRun run : next) {
+            run.inlines().forEach(box -> continuing.add(box.id()));
+        }
+        for (int depth = 0; depth < maxInlineDepth(fragments); depth++) {
+            int start = -1;
+            for (int i = 0; i <= fragments.size(); i++) {
+                InlineBox box = i < fragments.size() ? inlineAt(fragments.get(i), depth) : null;
+                InlineBox open = start < 0 ? null : inlineAt(fragments.get(start), depth);
+                if (start >= 0 && !open.sameBoxAs(box)) {
+                    paintInlineBox(open, fragments, origins, start, i - 1, baseline, containingWidth,
+                            !continuing.contains(open.id()));
+                    start = -1;
+                }
+                if (box != null && start < 0) {
+                    start = i;
+                }
+            }
+        }
+    }
+
+    private static int maxInlineDepth(List<LineBreaker.Fragment> fragments) {
+        int depth = 0;
+        for (LineBreaker.Fragment fragment : fragments) {
+            depth = Math.max(depth, fragment.run().inlines().size());
+        }
+        return depth;
+    }
+
+    private static InlineBox inlineAt(LineBreaker.Fragment fragment, int depth) {
+        List<InlineBox> inlines = fragment.run().inlines();
+        return depth < inlines.size() ? inlines.get(depth) : null;
+    }
+
+    /** One inline box's rectangle on one line, from its first fragment to its last. */
+    private void paintInlineBox(
+            InlineBox box,
+            List<LineBreaker.Fragment> fragments,
+            float[] origins,
+            int first,
+            int last,
+            float baseline,
+            float containingWidth,
+            boolean closesHere) {
+
+        ComputedStyle style = box.style();
+        Edges padding = Edges.padding(style, containingWidth);
+        Edges border = Edges.borderWidths(style);
+        float left = origins[first] + fragments.get(first).x()
+                - (box.opensHere() ? padding.left() + border.left() : 0f);
+        float right = origins[last] + fragments.get(last).x() + fragments.get(last).width()
+                + (closesHere ? padding.right() + border.right() : 0f);
+
+        // The box is as tall as the text it wraps, which is the same extent a
+        // link area covers, grown by the box's own padding and border.
+        float size = fragments.get(first).run().style().fontSize();
+        float bottom = pdfY(baseline) - size * 0.25f - padding.bottom() - border.bottom();
+        float height = size * 1.2f + padding.vertical() + border.vertical();
+        Rect rect = new Rect(left, bottom, Math.max(0f, right - left), height);
+
+        // A rounded corner belongs to a whole box: a box cut by a line break is
+        // drawn square, because the corners the break made are not corners.
+        float radius = box.opensHere() && closesHere
+                ? style.length("border-top-left-radius")
+                        .map(length -> style.resolve(length, rect.width()))
+                        .orElse(0f)
+                : 0f;
+        Edges sides = new Edges(
+                border.top(),
+                closesHere ? border.right() : 0f,
+                border.bottom(),
+                box.opensHere() ? border.left() : 0f);
+
+        List<PaintCommand> decoration = new ArrayList<>();
+        style.backgroundColor().ifPresent(color -> {
+            decoration.add(new PaintCommand.SetFillColor(color));
+            decoration.add(radius > 0f
+                    ? new PaintCommand.FillRoundedRect(
+                            new RoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius))
+                    : new PaintCommand.FillRect(rect));
+        });
+        if (sides.horizontal() + sides.vertical() > 0f) {
+            paintBorders(decoration, style, rect, sides, radius);
+        }
+        decoration.forEach(page()::add);
     }
 
     /**
@@ -863,16 +972,35 @@ public final class Layout {
      */
     private static List<InlineRun> rest(List<LineBreaker.VisualLine> broken) {
         List<InlineRun> remaining = new ArrayList<>();
+        // An inline box already open when a line ends is cut by the break, not
+        // started by it, so it loses its left edge on the lines that follow.
+        java.util.Set<Integer> already = idsOf(broken.get(0));
         for (int i = 1; i < broken.size(); i++) {
             for (LineBreaker.Fragment fragment : broken.get(i).fragments()) {
+                InlineRun run = fragment.run();
+                List<InlineBox> inlines = run.inlines().stream()
+                        .map(box -> already.contains(box.id()) ? box.continued() : box)
+                        .toList();
                 remaining.add(switch (fragment) {
                     case LineBreaker.TextFragment text ->
-                            InlineRun.text(text.text(), text.run().style(), text.run().link());
-                    case LineBreaker.AtomicFragment atomic -> atomic.run();
+                            InlineRun.text(text.text(), run.style(), run.link(), inlines);
+                    case LineBreaker.AtomicFragment atomic -> atomic.run().image() != null
+                            ? InlineRun.image(run.image(), run.style(), run.link(), inlines)
+                            : InlineRun.inlineBlock(run.inlineBlock(), run.style(), run.link(), inlines);
                 });
             }
+            already.addAll(idsOf(broken.get(i)));
         }
         return remaining;
+    }
+
+    /** The inline boxes a visual line touches. */
+    private static java.util.Set<Integer> idsOf(LineBreaker.VisualLine line) {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        for (LineBreaker.Fragment fragment : line.fragments()) {
+            fragment.run().inlines().forEach(box -> ids.add(box.id()));
+        }
+        return ids;
     }
 
     private void emitFragment(LineBreaker.Fragment fragment, float originX, float baseline) {

@@ -1,0 +1,18 @@
+{
+  "fixture": "inline-decoration",
+  "layer": "features",
+  "description": "An inline box paints its own background and border behind each line it occupies, with its near edges on the first and last of them. Port-authored: the reference engine paints per-run colour, size, weight and decoration only, so an inline background has no reference behaviour to port.",
+  "pdf_assertions": {
+    "must_contain_operators": ["BT", "ET", "re", "f"],
+    "must_contain_text": ["Chipone", "Chiptwo", "highlighted", "undecorated"],
+    "min_size_bytes": 700,
+    "max_size_bytes": 2000000,
+    "min_pages": 1
+  },
+  "visual_assertions": [
+    "Both chips are drawn as rounded pale-blue pills with a thin border, each wider than its text by its padding.",
+    "The two chips are separate pills: the word between them is on the white page, not on a chip.",
+    "The highlighted phrase is drawn in yellow on each of the three lines it occupies, and no line is a closed box: the left edge is on the first line only and the right edge on the last.",
+    "Nothing is painted behind the undecorated span."
+  ]
+}

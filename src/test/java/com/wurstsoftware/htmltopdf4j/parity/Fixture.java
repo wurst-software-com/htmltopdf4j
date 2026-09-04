@@ -10,10 +10,11 @@ import java.util.List;
  * An HTML input held in the test corpus to exercise a named area of the Coverage
  * matrix.
  *
- * <p>The list below is the corpus. All of it but {@code features/break-inside}
- * and {@code features/float-break} is ported verbatim; those two are this
- * port's own, because the reference engine implements no break properties and
- * paginates a float wrongly, so neither has an Expectation worth porting.
+ * <p>The list below is the corpus. All of it but {@code features/break-inside},
+ * {@code features/float-break} and {@code features/inline-decoration} is ported
+ * verbatim; those three are this port's own, because the reference engine
+ * implements no break properties, paginates a float wrongly and paints no
+ * inline decoration, so none of them has an Expectation worth porting.
  * Adding a Fixture means
  * dropping the HTML into {@code src/test/resources/fixtures/<layer>/}, adding
  * its Expectation, and naming it here.
@@ -60,6 +61,7 @@ public record Fixture(String layer, String name) {
             new Fixture("features", "rich-cells"),
             new Fixture("features", "break-inside"),
             new Fixture("features", "float-break"),
+            new Fixture("features", "inline-decoration"),
             new Fixture("combined", "invoice"),
             new Fixture("edge-cases", "unicode"),
             new Fixture("edge-cases", "long-table"),

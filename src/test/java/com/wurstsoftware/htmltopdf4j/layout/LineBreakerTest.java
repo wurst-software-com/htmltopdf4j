@@ -30,7 +30,7 @@ class LineBreakerTest {
     }
 
     private static InlineRun text(String text) {
-        return new InlineRun(text, ComputedStyle.of(Map.of("font-size", "12pt")), null, null, null);
+        return InlineRun.text(text, ComputedStyle.of(Map.of("font-size", "12pt")), null);
     }
 
     private static String textOf(LineBreaker.VisualLine line) {
