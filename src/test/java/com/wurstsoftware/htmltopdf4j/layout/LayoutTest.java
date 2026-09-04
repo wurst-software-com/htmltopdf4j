@@ -114,6 +114,53 @@ class LayoutTest {
 
     // --- Alignment ---------------------------------------------------------
 
+    private static final String PROSE =
+            "One two three four five six seven eight nine ten eleven twelve "
+                    + "thirteen fourteen fifteen sixteen seventeen eighteen.";
+
+    @Test
+    void justifyStretchesEveryLineButTheLast() {
+        Laid justified = Laid.of("<p style='width:200pt; text-align:justify'>" + PROSE + "</p>");
+        Laid ragged = Laid.of("<p style='width:200pt'>" + PROSE + "</p>");
+
+        List<Laid.Line> stretched = justified.lines();
+        List<Laid.Line> plain = ragged.lines();
+        assertTrue(stretched.size() > 1, "the prose should wrap");
+        assertEquals(plain.size(), stretched.size(), "justifying must not change where lines break");
+
+        for (int i = 0; i < stretched.size() - 1; i++) {
+            assertTrue(lastX(stretched.get(i)) > lastX(plain.get(i)),
+                    "line " + i + " should reach further right when justified");
+        }
+    }
+
+    @Test
+    void theLastLineOfAJustifiedBlockIsLeftAsItFalls() {
+        Laid justified = Laid.of("<p style='width:200pt; text-align:justify'>" + PROSE + "</p>");
+        Laid ragged = Laid.of("<p style='width:200pt'>" + PROSE + "</p>");
+
+        List<Laid.Line> stretched = justified.lines();
+        List<Laid.Line> plain = ragged.lines();
+        assertEquals(
+                lastX(plain.get(plain.size() - 1)),
+                lastX(stretched.get(stretched.size() - 1)),
+                TOLERANCE);
+    }
+
+    @Test
+    void aJustifiedLineStillStartsAtTheLeftEdge() {
+        Laid justified = Laid.of("<p style='width:200pt; text-align:justify'>" + PROSE + "</p>");
+
+        for (Laid.Line line : justified.lines()) {
+            assertEquals(48f, line.x(), TOLERANCE, "justifying spreads the gaps, it does not indent");
+        }
+    }
+
+    private static float lastX(Laid.Line line) {
+        return line.runs.get(line.runs.size() - 1).x();
+    }
+
+
     @Test
     void centredTextStartsFurtherInThanLeftAlignedText() {
         Laid left = Laid.of("<p style='text-align:left'>Word</p>");
@@ -538,6 +585,31 @@ class LayoutTest {
         float top = laid.text("One").y();
         float bottom = laid.text("Three").y();
         assertEquals((top + bottom) / 2f, laid.text("Mark").y(), TOLERANCE);
+    }
+
+    @Test
+    void aCellWithOnlyABottomBorderGetsALineNotABox() {
+        Laid laid = Laid.of(
+                "<table><tr><td style='border-bottom: 1pt solid #000'>Cell</td></tr></table>");
+
+        assertTrue(laid.commands(0).stream().noneMatch(c -> c instanceof PaintCommand.StrokeRect),
+                "one declared side must not paint all four");
+        assertEquals(
+                1L,
+                laid.commands(0).stream().filter(c -> c instanceof PaintCommand.StrokeLine).count());
+    }
+
+    @Test
+    void eachCellBorderSideKeepsItsOwnColour() {
+        Laid laid = Laid.of(
+                "<table><tr><td style='border-top: 1pt solid #ff0000;"
+                        + " border-bottom: 1pt solid #0000ff'>Cell</td></tr></table>");
+
+        long colours = laid.commands(0).stream()
+                .filter(c -> c instanceof PaintCommand.SetStrokeColor)
+                .distinct()
+                .count();
+        assertEquals(2L, colours, "the two sides should stroke in two colours");
     }
 
     // --- Lists -------------------------------------------------------------

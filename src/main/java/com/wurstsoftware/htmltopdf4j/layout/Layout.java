@@ -698,7 +698,7 @@ public final class Layout {
      * Strokes each border side down the middle of its own width, which is where
      * PDF centres a stroke, so a declared width covers the space it consumed.
      */
-    private static void paintBorders(
+    static void paintBorders(
             List<PaintCommand> out, ComputedStyle style, Rect rect, Edges border, float radius) {
 
         if (radius > 0f && uniform(border) && uniformStyle(style)) {
@@ -786,8 +786,17 @@ public final class Layout {
             ensureSpace(visual.height());
             float offset = LineBreaker.alignmentOffset(align, visual.width(), lineWidth);
             float baseline = y + visual.leading() / 2f + visual.ascent();
-            for (LineBreaker.Fragment fragment : visual.fragments()) {
-                emitFragment(fragment, lineLeft + offset, baseline);
+            // Justification widens the gaps between the pieces of a line rather
+            // than moving the line, and the last line of a block keeps the ragged
+            // edge it fell with — a stretched final line is the classic tell of a
+            // renderer that justified one line too many.
+            float slack = align == TextAlign.JUSTIFY && broken.size() > 1
+                    ? Math.max(0f, lineWidth - visual.width())
+                    : 0f;
+            int gaps = visual.fragments().size() - 1;
+            for (int i = 0; i < visual.fragments().size(); i++) {
+                float spread = gaps > 0 ? slack * i / gaps : 0f;
+                emitFragment(visual.fragments().get(i), lineLeft + offset + spread, baseline);
             }
             y += visual.height();
             lineIndent = 0f;

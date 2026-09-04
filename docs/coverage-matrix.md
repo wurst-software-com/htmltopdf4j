@@ -20,7 +20,7 @@ byte-identical output. Anything outside that is None here and stays None.
 | `p`, `h1`–`h6`, `blockquote`, `figure`, `figcaption`, `address`, `center` | Full | With the user-agent margins |
 | `span`, `b`, `strong`, `i`, `em`, `cite`, `var`, `dfn`, `small`, `big`, `code`, `kbd`, `samp`, `tt`, `mark` | Full | Inline runs |
 | `u`, `ins`, `s`, `strike`, `del` | Full | Underline and line-through |
-| `sub`, `sup` | Partial | Sized down, but not raised or lowered — no `vertical-align` |
+| `sub`, `sup` | Partial | Sized down, but not raised or lowered — `vertical-align` moves table cells only |
 | `br` | Full | Forces a line break |
 | `hr` | Full | Drawn as a rule |
 | `pre` | Full | `white-space: pre` and a monospace Face |
@@ -56,7 +56,9 @@ byte-identical output. Anything outside that is None here and stays None.
 | `@media screen` | Full | Correctly does *not* apply |
 | `@page` size, orientation and margins | Full | |
 | `@page` margin boxes (`@top-center` and friends) | Full | Painted after pagination, because `counter(pages)` needs the final Page count |
-| `@font-face` with `local()`, `url()` and `data:` | Full | `http(s)` sources are refused, not fetched |
+| `@font-face` with `local()`, `url()` and `data:` | Full | `local()` matches a face's full or PostScript name, not only its family. `http(s)` sources are refused, not fetched |
+| `@font-face` `font-weight` and `font-style` descriptors | Full | A second rule for one family supplies its bold or italic variant rather than replacing it |
+| `@font-face` source formats | Partial | Bare SFNT (`.ttf`, `.otf`) and WOFF1, which is unwrapped to SFNT. WOFF2 needs Brotli, which the JDK does not carry, so it is refused and the `src` chain moves on |
 | `@import` | None | Would be a network or file fetch mid-parse |
 | `@supports`, `@keyframes`, `@layer`, `@container` | None | Ignored; the rules around them survive |
 
@@ -83,8 +85,7 @@ byte-identical output. Anything outside that is None here and stays None.
 | `border-style` | Partial | `none`, `solid`, `dashed` and `dotted` are drawn as declared; `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid |
 | `border-radius` | Full | Including the four-corner form; the elliptical `/` form uses its horizontal half |
 | `box-sizing` | Full | `content-box` and `border-box` |
-| `width`, `height`, `min-width`, `max-width`, `max-height` | Full | |
-| `min-height` | None | |
+| `width`, `height`, `min-width`, `max-width`, `min-height`, `max-height` | Full | `min-height` holds a short block open, the same rule `height` already followed |
 | Percentage widths and heights | Full | |
 | Margin collapsing | Partial | Adjacent siblings collapse; parent/first-child collapsing does not |
 | `overflow: hidden` | Partial | Emitted as a PDF clip, but only for a box with a definite height — without one there is nothing for the content to overflow |
@@ -101,8 +102,7 @@ byte-identical output. Anything outside that is None here and stays None.
 | Faux bold | Full | Fill plus a thin stroke, when the family has no real bold Face |
 | Faux italic | None | An italic-less family is drawn upright |
 | `line-height` (`normal`, unitless, lengths, percentages) | Full | A unitless value inherits as a multiplier |
-| `text-align: left`, `right`, `center` | Full | |
-| `text-align: justify` | None | Falls back to left |
+| `text-align: left`, `right`, `center`, `justify` | Full | Justification widens the gaps between the pieces of a line; the last line of a block keeps the ragged edge it fell with |
 | `text-decoration: underline`, `line-through`, `none` | Full | |
 | `text-decoration: overline` | None | |
 | `text-transform`, `text-indent`, `letter-spacing`, `word-spacing` | Full | |
@@ -125,10 +125,13 @@ byte-identical output. Anything outside that is None here and stays None.
 | `position: sticky` | None | |
 | `z-index` | Full | Positioned boxes are painted in a post-pass sorted by z-index |
 | Flexbox: `flex-direction`, `flex-wrap`, `flex`, `flex-grow/shrink/basis`, `justify-content`, `order`, `gap` | Full | Inline children of a flex container are blockified |
-| Flexbox: `align-items`, `align-content`, `align-self` | None | Items are stretched to the line |
+| Flexbox: `align-items`, `align-content`, `align-self` | None | Items are stretched to the line. On a **grid** container both `align-items` and `align-self` are honoured |
 | Grid: `grid-template-columns` (lengths, `fr`, `repeat()`), `grid-template-areas`, `grid-column`, `grid-row`, `grid-area`, `gap` | Full | Definite tracks first, then `fr` shares the remainder; row-major placement |
-| Grid: `grid-template-rows`, `grid-auto-flow`, `grid-auto-rows`, `minmax()` | None | Rows are sized to their content |
+| Grid: `grid-template-rows` (lengths, `fr`, `auto`), `align-items`, `align-self` | Full | An `fr` row shares the container's declared `height`; with no declared height it is content-sized, because a fraction needs something to be a fraction of |
+| Grid: `grid-auto-flow`, `grid-auto-rows`, `minmax()` | None | Rows not named by a track are sized to their content |
 | Tables: automatic column widths, `colspan`, `rowspan`, header and footer groups | Full | A rowspan occupancy grid keeps the rows below a spanning cell aligned |
+| Tables: per-side cell borders | Full | A cell declaring only `border-bottom` gets one line under it, through the same per-side stroking blocks use |
+| Tables: `vertical-align` on a cell | Full | `middle` and `bottom` place the content in the row; `top` and `baseline` leave it at the top |
 | Tables: `border-collapse`, `table-layout: fixed` | None | Borders are always separate |
 | Multi-column (`column-count`, `column-width`) | None | |
 
@@ -168,10 +171,16 @@ byte-identical output. Anything outside that is None here and stays None.
 | Deflate compression | Full | |
 | Encryption, tagged PDF, PDF/A, forms, attachments | None | |
 
-## Known environment-dependent gaps
+## Environment dependence
 
-Two Fixtures are in the known-failures ledger
-(`src/test/resources/parity-known-failures.txt`) because they name fonts that are
-not installed on the build machine — `features/font-family` and
-`features/font-face`. They are skipped rather than failed, and the ledger can
-only shrink: a listed Fixture that starts passing fails the build.
+The known-failures ledger (`src/test/resources/parity-known-failures.txt`) is
+**empty**: all 41 Fixtures meet their Expectations. The mechanism stays, because
+it can only shrink — a listed Fixture that starts passing fails the build — but
+it currently lists nothing.
+
+Two Fixtures do depend on the machine's fonts. `features/font-family` and
+`features/font-face` assert that Georgia, Arial and Courier New appear in the
+PDF's font objects, and this engine will not invent a `BaseFont` name for a Face
+it does not have, so they need those families installed. The rest of the suite
+needs no particular font: where a test needs a real font program it takes
+whatever is installed, and skips when there is nothing at all.

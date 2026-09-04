@@ -11,7 +11,6 @@ import com.wurstsoftware.htmltopdf4j.paint.Color;
 import com.wurstsoftware.htmltopdf4j.paint.PaintCommand;
 import com.wurstsoftware.htmltopdf4j.paint.Rect;
 import com.wurstsoftware.htmltopdf4j.style.ComputedStyle;
-import com.wurstsoftware.htmltopdf4j.style.CssColor;
 import com.wurstsoftware.htmltopdf4j.style.Length;
 import java.util.ArrayList;
 import java.util.List;
@@ -263,10 +262,9 @@ final class TableLayout {
         com.wurstsoftware.htmltopdf4j.style.LinearGradient.parse(style.raw("background-image"))
                 .ifPresent(gradient -> Layout.paintGradient(decoration, gradient, rect));
         if (border.top() + border.right() + border.bottom() + border.left() > 0f) {
-            decoration.add(new PaintCommand.SetStrokeColor(
-                    CssColor.parse(style.raw("border-top-color")).orElse(style.color())));
-            decoration.add(new PaintCommand.SetLineWidth(Math.max(border.top(), border.left())));
-            decoration.add(new PaintCommand.StrokeRect(rect));
+            // The same per-side stroking blocks get: a cell declaring only
+            // `border-bottom` should get one line under it, not a box round it.
+            Layout.paintBorders(decoration, style, rect, border, 0f);
         }
         decoration.forEach(layout.currentPage()::add);
     }
