@@ -1,6 +1,7 @@
 package com.wurstsoftware.htmltopdf4j.layout;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -119,8 +120,55 @@ class FontFaceSourceTest {
 
     @Test
     void aNonBase64DataUriIsTakenAsRawBytes() {
-        byte[] expected = "abc".getBytes(StandardCharsets.ISO_8859_1);
+        byte[] expected = {0x00, 0x01, 0x00, 0x00, 0x61, 0x62};
 
-        assertArrayEquals(expected, FontFaceSource.read("url(data:font/ttf,abc)", null));
+        assertArrayEquals(
+                expected,
+                FontFaceSource.read(
+                        "url(data:font/ttf," + new String(expected, StandardCharsets.ISO_8859_1) + ")",
+                        null));
+    }
+
+    @Test
+    void aWoffSourceIsUnwrappedIntoTheSfntTheEmbedderNeeds() {
+        byte[] sfnt = systemFont();
+        write("brand.woff", com.wurstsoftware.htmltopdf4j.text.WoffFixture.wrap(sfnt));
+
+        byte[] loaded = FontFaceSource.read("url(brand.woff) format('woff')", directory);
+
+        assertNotNull(loaded);
+        assertEquals(0x00010000, java.nio.ByteBuffer.wrap(loaded).getInt(0));
+        assertArrayEquals(
+                com.wurstsoftware.htmltopdf4j.text.WoffFixture.tablesOf(sfnt).stream()
+                        .filter(table -> table.tag().equals("head"))
+                        .findFirst()
+                        .orElseThrow()
+                        .data(),
+                com.wurstsoftware.htmltopdf4j.text.WoffFixture.tablesOf(loaded).stream()
+                        .filter(table -> table.tag().equals("head"))
+                        .findFirst()
+                        .orElseThrow()
+                        .data());
+    }
+
+    @Test
+    void aWoff2AlternativeIsSkippedForTheNextOneRatherThanLoadedHalfWay() {
+        // The format hint is only a hint; a woff2 payload has to be refused on
+        // its own signature, or the src chain would stop at a Face nothing can
+        // parse and the next alternative would never be tried.
+        write("brand.woff2", "wOF2 and then some bytes".getBytes(StandardCharsets.ISO_8859_1));
+        write("brand.ttf", PROGRAM);
+
+        assertArrayEquals(
+                PROGRAM,
+                FontFaceSource.read("url(brand.woff2) format('woff2'), url(brand.ttf)", directory));
+    }
+
+    private static byte[] systemFont() {
+        try {
+            return Files.readAllBytes(com.wurstsoftware.htmltopdf4j.text.TestFonts.available().get(0));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

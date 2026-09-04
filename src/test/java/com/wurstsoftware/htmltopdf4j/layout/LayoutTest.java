@@ -395,6 +395,39 @@ class LayoutTest {
         assertTrue(laid.text("B").x() > laid.text("Wide").x());
     }
 
+    private static Laid cellAligned(String alignment) {
+        return Laid.of(
+                "<style>td.mark { vertical-align: " + alignment + "; }</style>"
+                        + "<table><tr>"
+                        + "<td>One<br>Two<br>Three</td>"
+                        + "<td class='mark'>Mark</td>"
+                        + "</tr></table>");
+    }
+
+    @Test
+    void aCellsContentSitsAtTheTopOfTheRowByDefault() {
+        Laid laid = cellAligned("top");
+
+        assertEquals(laid.text("One").y(), laid.text("Mark").y(), TOLERANCE);
+    }
+
+    @Test
+    void aBottomAlignedCellDropsItsContentToTheFootOfTheRow() {
+        Laid laid = cellAligned("bottom");
+
+        // PDF y counts upward, so the foot of the row is the smallest y.
+        assertEquals(laid.text("Three").y(), laid.text("Mark").y(), TOLERANCE);
+    }
+
+    @Test
+    void aMiddleAlignedCellCentresItsContentInTheRow() {
+        Laid laid = cellAligned("middle");
+
+        float top = laid.text("One").y();
+        float bottom = laid.text("Three").y();
+        assertEquals((top + bottom) / 2f, laid.text("Mark").y(), TOLERANCE);
+    }
+
     // --- Lists -------------------------------------------------------------
 
     @Test

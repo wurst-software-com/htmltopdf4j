@@ -1,5 +1,6 @@
 package com.wurstsoftware.htmltopdf4j.layout;
 
+import com.wurstsoftware.htmltopdf4j.text.Woff;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -13,7 +14,9 @@ import java.util.Locale;
  * <p>A {@code src} is a comma-separated list of alternatives in order of
  * preference — a {@code local()} family, a {@code url()} of a file, a
  * {@code data:} URI — and the first one that can be read wins, which is exactly
- * what the list is for.
+ * what the list is for. An alternative in a container this engine cannot open,
+ * such as WOFF2, counts as unreadable, so the chain moves on rather than
+ * stopping at a Face nothing downstream can parse.
  */
 final class FontFaceSource {
 
@@ -22,7 +25,10 @@ final class FontFaceSource {
     /** The font program, or {@code null} when none of the alternatives can be read. */
     static byte[] read(String source, Path baseDirectory) {
         for (String alternative : split(source)) {
-            byte[] program = readOne(alternative.trim(), baseDirectory);
+            // The format hint is only a hint, so the container is decided by the
+            // bytes: WOFF1 is unwrapped, a bare SFNT passes through, and
+            // anything else is treated as an alternative that could not be read.
+            byte[] program = Woff.decode(readOne(alternative.trim(), baseDirectory));
             if (program != null) {
                 return program;
             }
