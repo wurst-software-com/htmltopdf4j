@@ -88,22 +88,18 @@ public final class Layout {
     private int pageIndex;
     private float y;
 
-    private Layout(RenderOptions options, Stylesheet stylesheet) {
+    private Layout(RenderOptions options, Stylesheet stylesheet, BoxTree tree) {
+        PageSetup setup = PageSetup.of(stylesheet, options, tree);
         this.options = options;
-        this.pageSize = options.pageSize();
+        this.pageSize = setup.size();
         this.faces = new FaceRegistry(options.defaultFace(), options.fontEnvironment());
         this.images = new ImageLoader(options.baseDirectory().orElse(null));
         this.breaker = new LineBreaker(faces::indexFor, faces::chain, this::measureAtomic);
         declareFontFaces(stylesheet, options.baseDirectory().orElse(null), options.fontEnvironment());
 
-        Edges margins = pageMargins(stylesheet, options);
+        Edges margins = setup.margins();
         this.pageMargins = margins;
-        this.marginBoxes = stylesheet.pageRules().stream()
-                .map(Stylesheet.PageRule::marginBoxes)
-                .reduce(new java.util.LinkedHashMap<>(), (all, boxes) -> {
-                    all.putAll(boxes);
-                    return all;
-                });
+        this.marginBoxes = setup.marginBoxes();
         this.contentLeft = margins.left();
         this.contentWidth = Math.max(1f, pageSize.width() - margins.horizontal());
         this.contentTop = margins.top();
@@ -136,7 +132,7 @@ public final class Layout {
 
     /** Flows a Document's Box tree onto Pages. */
     public static LayoutResult layout(BoxTree tree, Stylesheet stylesheet, RenderOptions options) {
-        Layout layout = new Layout(options, stylesheet);
+        Layout layout = new Layout(options, stylesheet, tree);
         layout.layoutChildren(tree.children(), layout.contentLeft, layout.contentWidth);
         layout.layoutPositioned();
         return layout.result();
@@ -154,32 +150,6 @@ public final class Layout {
         MarginBoxes.paint(emitted, marginBoxes, pageSize, pageMargins, faces);
         return new LayoutResult(
                 emitted, new RenderContext(pageSize, faces.chains(), links, images.images()));
-    }
-
-    /**
-     * The Page margins: the {@code @page} rule's if the Document declares one,
-     * otherwise the caller's.
-     */
-    private static Edges pageMargins(Stylesheet stylesheet, RenderOptions options) {
-        Edges caller = new Edges(
-                options.marginTop(), options.marginRight(), options.marginBottom(), options.marginLeft());
-        for (Stylesheet.PageRule rule : stylesheet.pageRules()) {
-            Map<String, String> declared = new HashMap<>();
-            rule.declarations().forEach(declaration ->
-                    Shorthands.expand(declaration.property(), declaration.value())
-                            .forEach(declared::put));
-            ComputedStyle style = ComputedStyle.of(declared);
-            caller = new Edges(
-                    margin(style, "margin-top", caller.top()),
-                    margin(style, "margin-right", caller.right()),
-                    margin(style, "margin-bottom", caller.bottom()),
-                    margin(style, "margin-left", caller.left()));
-        }
-        return caller;
-    }
-
-    private static float margin(ComputedStyle style, String property, float fallback) {
-        return style.length(property).map(length -> style.resolve(length, 0f)).orElse(fallback);
     }
 
     // --- Page management ----------------------------------------------------

@@ -69,12 +69,13 @@ class ScaleTest {
             assertTrue(parsed.getNumberOfPages() >= 10,
                     "1,391 rows should paginate widely, not collapse onto a few Pages");
 
-            // Not landscape: the document asks for it through a Page it names
-            // (`@page page0 { size: landscape }`, selected by `page: page0`) and
-            // `@page` contributes margins only here — issue #34. What is
-            // asserted is that every Page is the same sheet, because a document
-            // that changes paper mid-run is broken either way.
+            // Landscape: the document asks for it through a Page it names
+            // (`@page page0 { size: landscape }`, selected by `page: page0`),
+            // and every Page is the same sheet, because a document that changes
+            // paper mid-run is broken either way.
             PDPage first = parsed.getPage(0);
+            assertTrue(first.getMediaBox().getWidth() > first.getMediaBox().getHeight(),
+                    "the document names a landscape Page and selects it");
             for (PDPage page : parsed.getPages()) {
                 assertEquals(first.getMediaBox().getWidth(), page.getMediaBox().getWidth(), 0.5f);
                 assertEquals(first.getMediaBox().getHeight(), page.getMediaBox().getHeight(), 0.5f);
@@ -86,9 +87,10 @@ class ScaleTest {
     void everyRowSurvivesToTheLastPage() throws IOException {
         try (PDDocument parsed = Loader.loadPDF(pdf)) {
             // Whitespace is stripped before matching: the sixteen declared
-            // columns are far wider than the sheet the document ends up on, so
-            // cell text wraps mid-word and a student id arrives as `1000` /
-            // `0554` / `03` on three lines.
+            // columns come to 1,879pt, which is wider than the landscape sheet
+            // too, so cell text still wraps mid-word and a student id arrives as
+            // `100005` / `5403` over two lines. Where the break falls is a
+            // question for the table's column widths, not for the sheet.
             String text = new PDFTextStripper().getText(parsed).replaceAll("\\s", "");
 
             assertTrue(text.contains("AdvisingCompletedorIncompleteStudentList"),

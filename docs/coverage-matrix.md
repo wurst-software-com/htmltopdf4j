@@ -55,9 +55,10 @@ byte-identical output. Anything outside that is None here and stays None.
 | `@media print`, `@media all`, bare feature queries | Full | Evaluated once per render: this is a printer |
 | `@media screen` | Full | Correctly does *not* apply |
 | `<link rel=stylesheet>` | Partial | Loaded from under `RenderOptions.baseDirectory`, in document order with the `<style>` blocks. Nothing is fetched: a target outside the base directory, an `http(s)` one, or any target at all when no base directory was given, is skipped and the Document is styled by what it carries |
-| `@page` margins | Full | But a *named* rule's margins apply to every Page too, because the selector is never consulted — [#34](https://github.com/wurst-software-com/htmltopdf4j/issues/34) |
-| `@page` size and orientation | None | The `size` declaration parses and is then never read; the sheet always comes from `RenderOptions.pageSize()` — [#34](https://github.com/wurst-software-com/htmltopdf4j/issues/34) |
-| Named Pages (`@page name` selected by `page: name`) | None | Nothing selects a rule and nothing is excluded by one — [#34](https://github.com/wurst-software-com/htmltopdf4j/issues/34) |
+| `@page` margins | Full | Rules that apply cascade per declaration, in source order |
+| `@page` size and orientation | Full | A paper name (`A3`–`A5`, `letter`, `legal`), `portrait`/`landscape`, the two together, or one or two lengths; `auto` and a missing `size` keep `RenderOptions.pageSize()` |
+| Named Pages (`@page name` selected by `page: name`) | Partial | A rule nothing names never applies, and a named one decides the sheet for the whole render; changing sheet part-way through a Document does not |
+| `@page:first`, `:left`, `:right` | None | The pseudo-class is dropped, so such a rule applies to every Page |
 | `@page` margin boxes (`@top-center` and friends) | Full | Painted after pagination, because `counter(pages)` needs the final Page count |
 | `@font-face` with `local()`, `url()` and `data:` | Full | `local()` matches a face's full or PostScript name, not only its family. An alternative hinted `format(woff2)`, `format(svg)` or `format(embedded-opentype)` is skipped without being read. `http(s)` sources are refused, not fetched |
 | `@font-face` `font-weight` and `font-style` descriptors | Full | A second rule for one family supplies its bold or italic variant rather than replacing it |

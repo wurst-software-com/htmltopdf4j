@@ -29,17 +29,16 @@ painted so far.
 
 ## What it renders today
 
-126 Pages, 1.9 MB, about five seconds. Every row survives to the last Page and
+127 Pages, 1.9 MB, about five seconds. Every row survives to the last Page and
 cost per row does not grow with the number of rows, which is what the test
 asserts.
 
-It renders **portrait**, and it should be landscape. The document asks through a
-*named* Page — `@page page0 { … size: landscape }` selected by `page: page0` on
-the table — and `@page` here contributes margins and margin boxes only: the
-`size` declaration is parsed and never read. Sixteen columns declaring 1,879pt of
-width are then crushed into a 595pt sheet, and cell text wraps mid-word. That is
-[#34](https://github.com/wurst-software-com/htmltopdf4j/issues/34), which the
-document found; this test asserts around it rather than pretending otherwise.
+It renders **landscape**, as the document asks: through a *named* Page —
+`@page page0 { … size: landscape }` selected by `page: page0` on the table —
+which [#34](https://github.com/wurst-software-com/htmltopdf4j/issues/34) taught
+the engine to read. Cell text still wraps mid-word, because sixteen columns
+declaring 1,879pt of width do not fit an 806pt content area either; that is a
+question for the table's column widths, not for the sheet.
 
 ## Provenance
 

@@ -1,5 +1,6 @@
 package com.wurstsoftware.htmltopdf4j.layout;
 
+import com.wurstsoftware.htmltopdf4j.PageSize;
 import com.wurstsoftware.htmltopdf4j.RenderOptions;
 import com.wurstsoftware.htmltopdf4j.box.BoxTree;
 import com.wurstsoftware.htmltopdf4j.box.BoxTreeBuilder;
@@ -22,9 +23,11 @@ import org.jsoup.nodes.Document;
 final class Laid {
 
     private final List<Page> pages;
+    private final PageSize pageSize;
 
-    private Laid(List<Page> pages) {
+    private Laid(List<Page> pages, PageSize pageSize) {
         this.pages = pages;
+        this.pageSize = pageSize;
     }
 
     static Laid of(String html) {
@@ -35,11 +38,17 @@ final class Laid {
         Document document = Jsoup.parse(html);
         Stylesheet stylesheet = Cascade.authorStylesheet(document);
         BoxTree tree = BoxTreeBuilder.build(document, Cascade.apply(document, stylesheet));
-        return new Laid(Layout.layout(tree, stylesheet, options).pages());
+        LayoutResult result = Layout.layout(tree, stylesheet, options);
+        return new Laid(result.pages(), result.context().pageSize());
     }
 
     List<Page> pages() {
         return pages;
+    }
+
+    /** The sheet the Pages were laid out on, which {@code @page} may have chosen. */
+    PageSize pageSize() {
+        return pageSize;
     }
 
     int pageCount() {
