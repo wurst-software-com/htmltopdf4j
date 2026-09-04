@@ -125,7 +125,12 @@ public final class BoxTreeBuilder {
      */
     private void appendGenerated(Element element, Cascade.Pseudo pseudo, Content content, String link) {
         cascade.pseudoStyleOf(element, pseudo).ifPresent(style -> {
-            String text = GeneratedContent.of(style.raw("content"), element);
+            String text = com.wurstsoftware.htmltopdf4j.style.ContentValue.of(
+                    style.raw("content"),
+                    name -> element.hasAttr(name) ? element.attr(name) : null,
+                    // An element's generated content has no counters: this engine
+                    // keeps only the Page counters, and those belong to @page.
+                    com.wurstsoftware.htmltopdf4j.style.ContentValue.NONE);
             if (!text.isEmpty()) {
                 content.inline(InlineRun.text(text, style, link));
             }

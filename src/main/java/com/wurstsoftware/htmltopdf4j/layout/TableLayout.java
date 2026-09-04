@@ -185,6 +185,8 @@ final class TableLayout {
             decoration.add(new PaintCommand.SetFillColor(color));
             decoration.add(new PaintCommand.FillRect(rect));
         });
+        com.wurstsoftware.htmltopdf4j.style.LinearGradient.parse(style.raw("background-image"))
+                .ifPresent(gradient -> Layout.paintGradient(decoration, gradient, rect));
         if (border.top() + border.right() + border.bottom() + border.left() > 0f) {
             decoration.add(new PaintCommand.SetStrokeColor(
                     CssColor.parse(style.raw("border-top-color")).orElse(style.color())));

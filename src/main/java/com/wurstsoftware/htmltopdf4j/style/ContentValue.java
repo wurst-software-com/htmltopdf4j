@@ -1,22 +1,32 @@
-package com.wurstsoftware.htmltopdf4j.box;
+package com.wurstsoftware.htmltopdf4j.style;
 
 import java.util.Locale;
-import org.jsoup.nodes.Element;
+import java.util.function.UnaryOperator;
 
 /**
  * The text a {@code content} property produces.
  *
- * <p>A {@code content} value is a sequence of pieces — quoted strings and
- * {@code attr()} references — concatenated. A value containing anything this
- * engine does not implement, {@code counter()} above all, produces nothing at
- * all rather than a partial string: half a generated label is worse than none.
+ * <p>A {@code content} value is a sequence of pieces — quoted strings,
+ * {@code attr()} and {@code counter()} references — concatenated. A value
+ * containing a piece that cannot be resolved produces nothing at all rather
+ * than a partial string: half a generated label is worse than none.
  */
-final class GeneratedContent {
+public final class ContentValue {
 
-    private GeneratedContent() {}
+    /** A resolver that knows no names, for a context with no attributes or counters. */
+    public static final UnaryOperator<String> NONE = name -> null;
 
-    /** The generated text, or the empty string when the value generates nothing. */
-    static String of(String value, Element element) {
+    private ContentValue() {}
+
+    /**
+     * The generated text, or the empty string when the value generates nothing.
+     *
+     * @param attribute resolves an {@code attr(name)} reference, returning
+     *     {@code null} when the name is unknown
+     * @param counter resolves a {@code counter(name)} reference, returning
+     *     {@code null} when the counter is one this engine does not keep
+     */
+    public static String of(String value, UnaryOperator<String> attribute, UnaryOperator<String> counter) {
         if (value == null) {
             return "";
         }
@@ -42,13 +52,24 @@ final class GeneratedContent {
                 i = end + 1;
             } else if (trimmed.regionMatches(true, i, "attr(", 0, 5)) {
                 int end = trimmed.indexOf(')', i);
-                if (end < 0) {
+                String resolved = end < 0 ? null : attribute.apply(trimmed.substring(i + 5, end).trim());
+                if (resolved == null) {
                     return "";
                 }
-                generated.append(element.attr(trimmed.substring(i + 5, end).trim()));
+                generated.append(resolved);
+                i = end + 1;
+            } else if (trimmed.regionMatches(true, i, "counter(", 0, 8)) {
+                int end = trimmed.indexOf(')', i);
+                String resolved = end < 0 ? null : counter.apply(trimmed.substring(i + 8, end).trim());
+                if (resolved == null) {
+                    // A counter this engine does not keep makes the whole value
+                    // generate nothing: half a label is worse than none.
+                    return "";
+                }
+                generated.append(resolved);
                 i = end + 1;
             } else {
-                // counter(), open-quote, url() and the rest: not implemented.
+                // open-quote, url() and the rest: not implemented.
                 return "";
             }
         }

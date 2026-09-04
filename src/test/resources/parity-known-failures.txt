@@ -5,12 +5,6 @@
 # its Fixture goes green.
 
 # --- Not implemented yet ------------------------------------------------------
-# linear-gradient() backgrounds.
-features/gradients
-# background-image, which needs an image drawn behind a block rather than in flow.
-features/background-image
-# @page margin boxes: running headers, footers and page counters.
-features/paged-media
 
 # --- Cannot pass on a machine without these fonts -----------------------------
 # The Expectations name Georgia, Arial and Courier New in the PDF's font

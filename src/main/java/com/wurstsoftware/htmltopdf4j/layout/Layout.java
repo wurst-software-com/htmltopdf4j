@@ -21,6 +21,7 @@ import com.wurstsoftware.htmltopdf4j.style.ComputedStyle;
 import com.wurstsoftware.htmltopdf4j.style.CssColor;
 import com.wurstsoftware.htmltopdf4j.style.Display;
 import com.wurstsoftware.htmltopdf4j.style.Length;
+import com.wurstsoftware.htmltopdf4j.style.LinearGradient;
 import com.wurstsoftware.htmltopdf4j.style.Shorthands;
 import com.wurstsoftware.htmltopdf4j.style.Stylesheet;
 import com.wurstsoftware.htmltopdf4j.style.TextAlign;
@@ -60,6 +61,8 @@ public final class Layout {
     private final List<String> links = new ArrayList<>();
     private final Map<String, Integer> linkIndex = new HashMap<>();
 
+    private final Edges pageMargins;
+    private final Map<String, List<com.wurstsoftware.htmltopdf4j.style.Declaration>> marginBoxes;
     private final float contentLeft;
     private final float contentWidth;
     private final float contentTop;
@@ -76,6 +79,13 @@ public final class Layout {
         this.breaker = new LineBreaker(faces::indexFor, faces::chain, this::measureAtomic);
 
         Edges margins = pageMargins(stylesheet, options);
+        this.pageMargins = margins;
+        this.marginBoxes = stylesheet.pageRules().stream()
+                .map(Stylesheet.PageRule::marginBoxes)
+                .reduce(new java.util.LinkedHashMap<>(), (all, boxes) -> {
+                    all.putAll(boxes);
+                    return all;
+                });
         this.contentLeft = margins.left();
         this.contentWidth = Math.max(1f, pageSize.width() - margins.horizontal());
         this.contentTop = margins.top();
@@ -98,6 +108,9 @@ public final class Layout {
         while (emitted.size() > 1 && emitted.get(emitted.size() - 1).isEmpty()) {
             emitted.remove(emitted.size() - 1);
         }
+        // Margin boxes are painted last because counter(pages) is the total Page
+        // count, and nothing knows that until pagination has finished.
+        MarginBoxes.paint(emitted, marginBoxes, pageSize, pageMargins, faces);
         return new LayoutResult(
                 emitted, new RenderContext(pageSize, faces.chains(), links, images.images()));
     }
@@ -330,8 +343,11 @@ public final class Layout {
             Edges padding) {
 
         Optional<Color> background = block.style().backgroundColor();
+        Optional<LinearGradient> gradient =
+                LinearGradient.parse(block.style().raw("background-image"));
+        Optional<Integer> backgroundImage = backgroundImageOf(block.style());
         boolean hasBorder = border.vertical() + border.horizontal() > 0f;
-        if (background.isEmpty() && !hasBorder) {
+        if (background.isEmpty() && gradient.isEmpty() && backgroundImage.isEmpty() && !hasBorder) {
             return;
         }
         float radius = block.style().length("border-top-left-radius")
@@ -354,11 +370,71 @@ public final class Layout {
                                 new RoundedRect(rect.x(), rect.y(), rect.width(), rect.height(), radius))
                         : new PaintCommand.FillRect(rect));
             });
+            gradient.ifPresent(value -> paintGradient(decoration, value, rect));
+            backgroundImage.ifPresent(imageIndex -> decoration.add(
+                    new PaintCommand.Image(imageIndex, rect.x(), rect.y(), rect.width(), rect.height())));
             if (hasBorder) {
                 paintBorders(decoration, block.style(), rect, border, radius);
             }
             pages.get(index).insert(index == startPage ? startMark : 0, decoration);
         }
+    }
+
+    /** How wide, in points, one band of a gradient is allowed to be. */
+    private static final float GRADIENT_BAND_WIDTH = 2f;
+
+    private static final int MIN_GRADIENT_BANDS = 8;
+    private static final int MAX_GRADIENT_BANDS = 256;
+
+    /**
+     * Paints a gradient as a run of solid bands across the box.
+     *
+     * <p>PDF has axial shadings, which would be exact, but they need a pattern
+     * resource per gradient and a colour space switch in the content stream.
+     * Bands need neither, and a band every couple of points is below what a
+     * reader resolves at any sane zoom.
+     */
+    static void paintGradient(List<PaintCommand> out, LinearGradient gradient, Rect rect) {
+        double radians = Math.toRadians(gradient.angleDegrees());
+        // A CSS angle is clockwise from "to top", so the gradient line's
+        // direction in PDF's y-up space is (sin, cos).
+        boolean horizontal = Math.abs(Math.sin(radians)) >= Math.abs(Math.cos(radians));
+        boolean reversed = horizontal ? Math.sin(radians) < 0 : Math.cos(radians) > 0;
+
+        float span = horizontal ? rect.width() : rect.height();
+        // One band every couple of points, so the seams fall below what a reader
+        // resolves. A short box gets few bands and a wide one gets many, rather
+        // than one count having to be right for both.
+        int bands = Math.clamp(
+                Math.round(span / GRADIENT_BAND_WIDTH), MIN_GRADIENT_BANDS, MAX_GRADIENT_BANDS);
+        float step = span / bands;
+        for (int i = 0; i < bands; i++) {
+            float fraction = (i + 0.5f) / bands;
+            out.add(new PaintCommand.SetFillColor(
+                    gradient.colorAt(reversed ? 1f - fraction : fraction)));
+            // Bands overlap by a hair so rounding never leaves a white seam.
+            out.add(new PaintCommand.FillRect(horizontal
+                    ? new Rect(rect.x() + i * step, rect.y(), step + 0.5f, rect.height())
+                    : new Rect(rect.x(), rect.y() + i * step, rect.width(), step + 0.5f)));
+        }
+    }
+
+    /** The {@code background-image: url(...)} of a block, decoded, if it has one. */
+    private Optional<Integer> backgroundImageOf(ComputedStyle style) {
+        String value = style.raw("background-image");
+        if (value == null) {
+            return Optional.empty();
+        }
+        int open = value.toLowerCase(java.util.Locale.ROOT).indexOf("url(");
+        if (open < 0) {
+            return Optional.empty();
+        }
+        int close = value.indexOf(')', open);
+        if (close < 0) {
+            return Optional.empty();
+        }
+        String source = value.substring(open + 4, close).trim().replaceAll("^['\"]|['\"]$", "");
+        return images.resolve(source);
     }
 
     /**
